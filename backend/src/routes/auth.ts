@@ -8,6 +8,14 @@ const router = Router();
 
 // GitHub OAuth
 router.get('/github', (req, res, next) => {
+  // Check if GitHub OAuth is configured
+  if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
+    return res.status(500).json({
+      error: 'GitHub OAuth not configured',
+      hint: 'Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables'
+    });
+  }
+
   // Pass through the state parameter to preserve redirect URL
   const state = req.query.state as string;
   passport.authenticate('github', {
@@ -18,7 +26,20 @@ router.get('/github', (req, res, next) => {
 
 router.get(
   '/github/callback',
-  passport.authenticate('github', { session: false, failureRedirect: '/login' }),
+  (req, res, next) => {
+    passport.authenticate('github', { session: false }, (err: any, user: any, info: any) => {
+      if (err) {
+        console.error('GitHub OAuth error:', err);
+        return res.status(500).json({ error: 'OAuth failed', details: err.message });
+      }
+      if (!user) {
+        console.error('GitHub OAuth: No user returned', info);
+        return res.status(401).json({ error: 'Authentication failed', info });
+      }
+      req.user = user;
+      next();
+    })(req, res, next);
+  },
   (req, res) => {
     const user = req.user as User;
     const token = generateToken({
