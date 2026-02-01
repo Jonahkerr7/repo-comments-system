@@ -26,14 +26,22 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
 const HOST = process.env.HOST || 'localhost';
 
-// Security middleware
-app.use(helmet());
+// Security middleware - disable CSP for widget files
+app.use('/widget', (req, res, next) => {
+  res.removeHeader('Content-Security-Policy');
+  next();
+});
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP to allow widget embedding
+  crossOriginEmbedderPolicy: false,
+}));
 
 // CORS configuration
 const corsOrigins = process.env.CORS_ORIGIN?.split(',') || [
   'http://localhost:5173',
   'http://localhost:8080',
-  'http://localhost:3000'
+  'http://localhost:3000',
+  'https://jonahkerr7.github.io'
 ];
 
 // Allow all localhost and chrome-extension origins in development
