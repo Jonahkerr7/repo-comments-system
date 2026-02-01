@@ -273,6 +273,52 @@ router.patch(
   }
 );
 
+// Get threads for a specific deployment
+router.get('/:id/threads', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.query;
+
+  try {
+    // First get the deployment to get repo/branch
+    const deploymentResult = await query(
+      'SELECT repo, branch FROM deployments WHERE id = $1',
+      [id]
+    );
+
+    if (deploymentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Deployment not found' });
+    }
+
+    const { repo, branch } = deploymentResult.rows[0];
+
+    // Get threads for this repo/branch
+    let queryText = `
+      SELECT
+        t.*,
+        u.name as created_by_name,
+        (SELECT COUNT(*) FROM messages m WHERE m.thread_id = t.id) as message_count,
+        (SELECT content FROM messages m WHERE m.thread_id = t.id ORDER BY m.created_at ASC LIMIT 1) as first_message
+      FROM threads t
+      LEFT JOIN users u ON t.created_by = u.id
+      WHERE t.repo = $1 AND t.branch = $2
+    `;
+    const params: any[] = [repo, branch];
+
+    if (status) {
+      queryText += ' AND t.status = $3';
+      params.push(status);
+    }
+
+    queryText += ' ORDER BY t.created_at DESC';
+
+    const result = await query(queryText, params);
+    res.json(result.rows);
+  } catch (error) {
+    logger.error('Error fetching deployment threads', error);
+    res.status(500).json({ error: 'Failed to fetch threads' });
+  }
+});
+
 // Log a view (track who's looking at deployments)
 router.post('/:id/view', authenticate, async (req, res) => {
   const { id } = req.params;

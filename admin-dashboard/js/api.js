@@ -249,6 +249,12 @@ class API {
       body: JSON.stringify({ repo, default_role: defaultRole }),
     });
   }
+
+  // Get threads for a specific deployment
+  async getDeploymentThreads(deploymentId, status = null) {
+    const params = status ? `?status=${encodeURIComponent(status)}` : '';
+    return this.request(`/deployments/${deploymentId}/threads${params}`);
+  }
 }
 
 // Create global API instance

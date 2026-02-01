@@ -47,14 +47,23 @@ router.post(
         });
       }
 
-      // Create thread
+      // Find the active deployment for this repo/branch
+      const deploymentResult = await query(
+        `SELECT id FROM deployments
+         WHERE repo = $1 AND branch = $2 AND status != 'closed'
+         ORDER BY created_at DESC LIMIT 1`,
+        [data.repo, data.branch]
+      );
+      const deploymentId = deploymentResult.rows[0]?.id || null;
+
+      // Create thread with deployment link
       const threadResult = await query<Thread>(
         `INSERT INTO threads (
           repo, branch, commit_hash, context_type,
           file_path, line_start, line_end, code_snippet,
           selector, xpath, coordinates, screenshot_url,
-          priority, tags, created_by
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          priority, tags, created_by, deployment_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         RETURNING *`,
         [
           data.repo,
@@ -72,6 +81,7 @@ router.post(
           data.priority || 'normal',
           data.tags || [],
           authReq.user!.id,
+          deploymentId,
         ]
       );
 
