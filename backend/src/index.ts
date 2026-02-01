@@ -62,8 +62,8 @@ const corsOptions = {
     // Allow configured origins
     if (corsOrigins.includes(origin)) return callback(null, true);
 
-    // Allow all localhost in development
-    if (process.env.NODE_ENV !== 'production' && origin.includes('localhost')) {
+    // Allow all localhost origins (for admin dashboard)
+    if (origin.includes('localhost')) {
       return callback(null, true);
     }
 
