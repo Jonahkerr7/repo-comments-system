@@ -135,11 +135,11 @@ class CommentsManager {
         <div class="comment-messages">
           ${messages.length > 0 ? messages.map((msg, idx) => `
             <div class="comment-message ${idx === 0 ? 'first-message' : ''}">
-              <div class="message-header">
+              <span class="message-header">
                 <span class="message-author">${msg.author_name || 'Unknown'}</span>
                 <span class="message-time">${this.formatTimeAgo(msg.created_at)}</span>
-              </div>
-              <div class="message-content">${this.escapeHtml(msg.content)}</div>
+              </span>
+              <span class="message-content">${this.escapeHtml(msg.content)}</span>
             </div>
           `).join('') : '<div class="no-messages">No messages</div>'}
         </div>
