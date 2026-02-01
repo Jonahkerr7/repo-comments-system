@@ -156,16 +156,6 @@
             </table>
           </div>
         </div>
-
-        <div class="url-mappings-section">
-          <div class="section-header">
-            <h3>URL Mappings</h3>
-            <p class="section-description">Auto-registered from deployments. Add manual mappings for custom domains.</p>
-            <button class="btn-secondary btn-small" id="btn-add-url-mapping">Add Manual Mapping</button>
-          </div>
-
-          <div class="url-mappings-list" id="url-mappings-list"></div>
-        </div>
       </section>
 
       <!-- Iterations/Deployments Page -->
@@ -346,44 +336,6 @@
           <div id="user-permissions-list" class="permissions-list"></div>
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- Add URL Mapping Modal -->
-  <div id="modal-add-url" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Add URL Mapping</h3>
-        <button class="modal-close">&times;</button>
-      </div>
-      <form id="form-add-url">
-        <div class="form-group">
-          <label>Repository</label>
-          <input type="text" name="repo" required placeholder="acme-corp/design-system">
-          <small>Format: owner/repo-name</small>
-        </div>
-        <div class="form-group">
-          <label>URL Pattern</label>
-          <input type="text" name="url_pattern" required placeholder="https://staging.acme.com/*">
-          <small>Use * as wildcard. Example: https://*.preview.app/*</small>
-        </div>
-        <div class="form-group">
-          <label>Environment</label>
-          <select name="environment">
-            <option value="development">Development</option>
-            <option value="staging">Staging</option>
-            <option value="production">Production</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Description (optional)</label>
-          <input type="text" name="description" placeholder="Staging environment">
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary modal-close">Cancel</button>
-          <button type="submit" class="btn-primary">Add Mapping</button>
-        </div>
-      </form>
     </div>
   </div>
 

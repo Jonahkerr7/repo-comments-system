@@ -135,31 +135,6 @@ class AdminApp {
       this.showNotification('Repository configuration saved');
     });
 
-    // Add URL Mapping
-    document.getElementById('btn-add-url-mapping').addEventListener('click', () => {
-      this.openModal('modal-add-url');
-    });
-
-    document.getElementById('form-add-url').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const data = Object.fromEntries(formData);
-
-      // Remove empty optional fields
-      if (!data.branch) delete data.branch;
-      if (!data.description) delete data.description;
-
-      try {
-        await api.createRepoUrl(data);
-        this.closeModal('modal-add-url');
-        e.target.reset();
-        ReposManager.loadUrlMappings();
-        this.showNotification('URL mapping created successfully');
-      } catch (error) {
-        this.showNotification('Failed to create URL mapping: ' + error.message, 'error');
-      }
-    });
-
     // Modal close buttons
     document.querySelectorAll('.modal-close').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -213,7 +188,6 @@ class AdminApp {
       case 'repositories':
         ReposManager.loadRepos();
         ReposManager.loadActiveBranches();
-        ReposManager.loadUrlMappings();
         break;
       case 'iterations':
         IterationsManager.loadIterations();

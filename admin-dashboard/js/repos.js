@@ -4,7 +4,7 @@ class ReposManager {
   static repos = new Set();
   static githubRepos = [];
   static connectedRepos = new Set();
-  static repoUrls = new Map(); // repo -> url mapping
+  static deploymentUrls = new Map(); // repo -> latest deployment URL
 
   static async loadRepos() {
     const reposList = document.getElementById('repos-list');
@@ -14,18 +14,23 @@ class ReposManager {
       const permissions = await api.request('/permissions');
       this.connectedRepos = new Set(permissions.map(p => p.repo));
 
-      // Fetch repo URLs for launch buttons
+      // Fetch deployments to get URLs for launch buttons
       try {
-        const urlMappings = await api.getRepoUrls();
-        this.repoUrls.clear();
-        urlMappings.forEach(m => {
-          // Prefer production URLs, but use any if not set
-          if (!this.repoUrls.has(m.repo) || m.environment === 'production') {
-            this.repoUrls.set(m.repo, m.url_pattern);
+        const deployments = await api.getDeployments({ limit: 100 });
+        this.deploymentUrls.clear();
+        // Group by repo, prefer production/main branch deployments
+        deployments.forEach(d => {
+          if (!d.url) return;
+          const existing = this.deploymentUrls.get(d.repo);
+          // Prefer: production env, or main/master branch, or most recent
+          if (!existing ||
+              (d.environment === 'production' && existing.environment !== 'production') ||
+              ((d.branch === 'main' || d.branch === 'master') && existing.branch !== 'main' && existing.branch !== 'master')) {
+            this.deploymentUrls.set(d.repo, d);
           }
         });
       } catch (e) {
-        console.warn('Could not load repo URLs:', e);
+        console.warn('Could not load deployments:', e);
       }
 
       // Try to get GitHub repos
@@ -116,9 +121,9 @@ class ReposManager {
 
   static renderGitHubRepoCard(repo) {
     const isConnected = this.connectedRepos.has(repo.full_name);
-    // Use configured URL if available, otherwise fall back to localhost
-    const configuredUrl = this.repoUrls.get(repo.full_name);
-    const previewUrl = configuredUrl || `http://localhost:8080?repo=${encodeURIComponent(repo.full_name)}`;
+    // Use deployment URL if available
+    const deployment = this.deploymentUrls.get(repo.full_name);
+    const previewUrl = deployment?.url;
 
     return `
       <div class="github-repo-card ${isConnected ? 'connected' : ''}" data-repo="${repo.full_name}">
@@ -129,7 +134,7 @@ class ReposManager {
         </div>
         <div class="github-repo-actions">
           ${isConnected
-            ? `<a href="${previewUrl}" target="_blank" class="btn-success btn-small">Launch</a>
+            ? `${previewUrl ? `<a href="${previewUrl}" target="_blank" class="btn-success btn-small">Launch</a>` : ''}
                <span class="connected-badge">Connected</span>`
             : '<button class="btn-primary btn-small btn-connect-repo">Connect</button>'
           }
@@ -175,9 +180,9 @@ class ReposManager {
   static renderRepoCard(repo, permissions = []) {
     const userPerms = permissions.filter(p => p.user_id);
     const teamPerms = permissions.filter(p => p.team_id);
-    // Use configured URL if available, otherwise fall back to localhost
-    const configuredUrl = this.repoUrls.get(repo);
-    const previewUrl = configuredUrl || `http://localhost:8080?repo=${encodeURIComponent(repo)}`;
+    // Use deployment URL if available
+    const deployment = this.deploymentUrls.get(repo);
+    const previewUrl = deployment?.url;
 
     return `
       <div class="repo-card" data-repo="${repo}">
@@ -189,7 +194,7 @@ class ReposManager {
           </div>
         </div>
         <div class="repo-actions">
-          <a href="${previewUrl}" target="_blank" class="btn-small btn-success">Launch Preview</a>
+          ${previewUrl ? `<a href="${previewUrl}" target="_blank" class="btn-small btn-success">Launch</a>` : ''}
           <button class="btn-small btn-primary btn-manage-permissions">Permissions</button>
           <button class="btn-small btn-secondary btn-view-comments">Comments</button>
         </div>
@@ -514,73 +519,6 @@ class ReposManager {
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
     if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
     return date.toLocaleDateString();
-  }
-
-  // URL Mappings
-  static async loadUrlMappings() {
-    const urlMappingsList = document.getElementById('url-mappings-list');
-
-    try {
-      const mappings = await api.getRepoUrls();
-
-      if (mappings.length === 0) {
-        urlMappingsList.innerHTML = `
-          <div style="text-align: center; padding: 2rem; color: #a0aec0; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
-            <p>No URL mappings configured yet.</p>
-            <p style="margin-top: 0.5rem; font-size: 0.875rem;">Add a URL mapping to enable auto-detection of repositories.</p>
-          </div>
-        `;
-        return;
-      }
-
-      urlMappingsList.innerHTML = mappings.map(m => this.renderUrlMappingCard(m)).join('');
-      this.attachUrlMappingListeners();
-    } catch (error) {
-      console.error('Error loading URL mappings:', error);
-      urlMappingsList.innerHTML = `
-        <div style="text-align: center; padding: 2rem; color: #f56565;">
-          <p>Error loading URL mappings.</p>
-        </div>
-      `;
-    }
-  }
-
-  static renderUrlMappingCard(mapping) {
-    return `
-      <div class="url-mapping-card" data-mapping-id="${mapping.id}">
-        <div class="url-mapping-info">
-          <h4>${mapping.url_pattern}</h4>
-          <div class="url-mapping-meta">
-            <span>Repo: <strong>${mapping.repo}</strong></span>
-            <span class="env-badge env-${mapping.environment}">${mapping.environment}</span>
-            ${mapping.branch ? `<span>Branch: ${mapping.branch}</span>` : ''}
-            ${mapping.description ? `<span>${mapping.description}</span>` : ''}
-          </div>
-        </div>
-        <div class="url-mapping-actions">
-          <button class="btn-small btn-secondary btn-delete-url-mapping">Delete</button>
-        </div>
-      </div>
-    `;
-  }
-
-  static attachUrlMappingListeners() {
-    document.querySelectorAll('.btn-delete-url-mapping').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const card = e.target.closest('.url-mapping-card');
-        const id = card.dataset.mappingId;
-
-        if (confirm('Are you sure you want to delete this URL mapping?')) {
-          try {
-            await api.deleteRepoUrl(id);
-            this.loadUrlMappings();
-            app.showNotification('URL mapping deleted');
-          } catch (error) {
-            app.showNotification('Failed to delete: ' + error.message, 'error');
-          }
-        }
-      });
-    });
   }
 }
 

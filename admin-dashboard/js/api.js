@@ -179,36 +179,6 @@ class API {
     return this.request(`/threads/${id}`);
   }
 
-  // Repo URL mappings
-  async getRepoUrls(repo = null) {
-    const params = repo ? `?repo=${encodeURIComponent(repo)}` : '';
-    return this.request(`/repo-urls${params}`);
-  }
-
-  async createRepoUrl(data) {
-    return this.request('/repo-urls', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateRepoUrl(id, data) {
-    return this.request(`/repo-urls/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteRepoUrl(id) {
-    return this.request(`/repo-urls/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async lookupRepoForUrl(url) {
-    return this.request(`/repo-urls/lookup?url=${encodeURIComponent(url)}`);
-  }
-
   // Deployments/Iterations endpoints
   async getDeployments(filters = {}) {
     const params = new URLSearchParams();
