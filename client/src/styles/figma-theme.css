@@ -1,0 +1,578 @@
+/* Figma-like Comment System Styles */
+
+:root {
+  /* Figma colors */
+  --figma-purple: #7B61FF;
+  --figma-purple-hover: #6852E8;
+  --figma-purple-light: #E6E1FF;
+  --figma-green: #00C853;
+  --figma-bg: #FFFFFF;
+  --figma-bg-secondary: #F5F5F5;
+  --figma-border: #E5E5E5;
+  --figma-text-primary: #000000;
+  --figma-text-secondary: #6F6F6F;
+  --figma-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --figma-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] {
+  --figma-purple: #9D8BFF;
+  --figma-purple-hover: #B5A4FF;
+  --figma-purple-light: #2D2640;
+  --figma-green: #1DE9B6;
+  --figma-bg: #1E1E1E;
+  --figma-bg-secondary: #2C2C2C;
+  --figma-border: #3D3D3D;
+  --figma-text-primary: #FFFFFF;
+  --figma-text-secondary: #B3B3B3;
+  --figma-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --figma-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+#repo-comments-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 999999;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#repo-comments-root * {
+  box-sizing: border-box;
+}
+
+/* Comment Markers (Figma-style pins) */
+.rc-marker {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--figma-purple);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: var(--figma-shadow);
+  transition: all 0.15s ease;
+  z-index: 1000000;
+}
+
+.rc-marker:hover {
+  background-color: var(--figma-purple-hover);
+  transform: scale(1.1);
+  box-shadow: var(--figma-shadow-lg);
+}
+
+.rc-marker.resolved {
+  background-color: var(--figma-green);
+  opacity: 0.6;
+}
+
+.rc-marker.resolved:hover {
+  opacity: 0.8;
+}
+
+.rc-marker.active {
+  background-color: var(--figma-purple-hover);
+  box-shadow: 0 0 0 4px var(--figma-purple-light);
+}
+
+/* Marker pulse animation */
+.rc-marker.new {
+  animation: marker-pulse 2s infinite;
+}
+
+@keyframes marker-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+/* Comment bubble preview (on hover) */
+.rc-marker-preview {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  background: var(--figma-bg);
+  border: 1px solid var(--figma-border);
+  border-radius: 8px;
+  padding: 12px;
+  max-width: 280px;
+  box-shadow: var(--figma-shadow-lg);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 1000001;
+}
+
+.rc-marker:hover .rc-marker-preview {
+  opacity: 1;
+  transition-delay: 0.3s;
+}
+
+.rc-marker-preview::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--figma-bg);
+}
+
+.rc-marker-preview-content {
+  color: var(--figma-text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Side Panel (Figma-style) */
+.rc-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 360px;
+  height: 100vh;
+  background: var(--figma-bg);
+  border-left: 1px solid var(--figma-border);
+  box-shadow: var(--figma-shadow-lg);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000002;
+}
+
+.rc-panel.open {
+  transform: translateX(0);
+}
+
+[data-position="left"] .rc-panel {
+  right: auto;
+  left: 0;
+  border-left: none;
+  border-right: 1px solid var(--figma-border);
+  transform: translateX(-100%);
+}
+
+[data-position="left"] .rc-panel.open {
+  transform: translateX(0);
+}
+
+/* Panel Header */
+.rc-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--figma-border);
+  flex-shrink: 0;
+}
+
+.rc-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--figma-text-primary);
+  margin: 0;
+}
+
+.rc-panel-close {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--figma-text-secondary);
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.rc-panel-close:hover {
+  background: var(--figma-bg-secondary);
+  color: var(--figma-text-primary);
+}
+
+/* Panel Tabs */
+.rc-panel-tabs {
+  display: flex;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--figma-border);
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.rc-panel-tab {
+  background: none;
+  border: none;
+  padding: 12px 0;
+  cursor: pointer;
+  color: var(--figma-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.rc-panel-tab:hover {
+  color: var(--figma-text-primary);
+}
+
+.rc-panel-tab.active {
+  color: var(--figma-purple);
+  border-bottom-color: var(--figma-purple);
+}
+
+.rc-panel-tab-badge {
+  display: inline-block;
+  background: var(--figma-purple);
+  color: white;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 11px;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+/* Thread List */
+.rc-thread-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.rc-thread-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.rc-thread-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rc-thread-list::-webkit-scrollbar-thumb {
+  background: var(--figma-border);
+  border-radius: 4px;
+}
+
+.rc-thread-list::-webkit-scrollbar-thumb:hover {
+  background: var(--figma-text-secondary);
+}
+
+/* Thread Item */
+.rc-thread {
+  background: var(--figma-bg);
+  border: 1px solid var(--figma-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rc-thread:hover {
+  border-color: var(--figma-purple);
+  box-shadow: var(--figma-shadow);
+}
+
+.rc-thread.active {
+  border-color: var(--figma-purple);
+  background: var(--figma-purple-light);
+}
+
+.rc-thread-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rc-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--figma-purple-light);
+  color: var(--figma-purple);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.rc-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.rc-thread-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.rc-thread-author {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--figma-text-primary);
+  margin-right: 6px;
+}
+
+.rc-thread-time {
+  font-size: 12px;
+  color: var(--figma-text-secondary);
+}
+
+.rc-thread-content {
+  color: var(--figma-text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rc-thread-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--figma-text-secondary);
+}
+
+.rc-thread-replies {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rc-thread-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rc-thread-status.resolved {
+  color: var(--figma-green);
+}
+
+/* Thread Detail View */
+.rc-thread-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.rc-thread-detail-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--figma-border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.rc-back-button {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--figma-text-secondary);
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.rc-back-button:hover {
+  background: var(--figma-bg-secondary);
+  color: var(--figma-text-primary);
+}
+
+.rc-thread-detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+/* Message */
+.rc-message {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.rc-message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.rc-message-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.rc-message-author {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--figma-text-primary);
+}
+
+.rc-message-time {
+  font-size: 12px;
+  color: var(--figma-text-secondary);
+}
+
+.rc-message-text {
+  color: var(--figma-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  word-wrap: break-word;
+}
+
+/* Input */
+.rc-input-container {
+  padding: 16px 20px;
+  border-top: 1px solid var(--figma-border);
+  flex-shrink: 0;
+}
+
+.rc-input-wrapper {
+  display: flex;
+  gap: 8px;
+}
+
+.rc-input {
+  flex: 1;
+  border: 1px solid var(--figma-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--figma-text-primary);
+  background: var(--figma-bg);
+  resize: none;
+  min-height: 36px;
+  max-height: 120px;
+  font-family: inherit;
+}
+
+.rc-input:focus {
+  outline: none;
+  border-color: var(--figma-purple);
+}
+
+.rc-input::placeholder {
+  color: var(--figma-text-secondary);
+}
+
+/* Buttons */
+.rc-button {
+  background: var(--figma-purple);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rc-button:hover {
+  background: var(--figma-purple-hover);
+}
+
+.rc-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rc-button-secondary {
+  background: transparent;
+  color: var(--figma-text-primary);
+  border: 1px solid var(--figma-border);
+}
+
+.rc-button-secondary:hover {
+  background: var(--figma-bg-secondary);
+}
+
+/* Toggle Comments Button */
+.rc-toggle-button {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--figma-purple);
+  color: white;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--figma-shadow-lg);
+  pointer-events: auto;
+  transition: all 0.2s ease;
+  z-index: 1000001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rc-toggle-button:hover {
+  background: var(--figma-purple-hover);
+  transform: scale(1.05);
+}
+
+[data-position="left"] .rc-toggle-button {
+  right: auto;
+  left: 24px;
+}
+
+/* Empty state */
+.rc-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--figma-text-secondary);
+}
+
+.rc-empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.rc-empty-text {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Loading spinner */
+.rc-spinner {
+  border: 3px solid var(--figma-border);
+  border-top-color: var(--figma-purple);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

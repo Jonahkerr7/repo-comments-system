@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Generate RepoComments Icons</title>
+  <style>
+    body { font-family: sans-serif; padding: 40px; }
+    canvas { border: 1px solid #ddd; margin: 10px; }
+    button { padding: 12px 24px; background: #7B61FF; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin: 10px; }
+    button:hover { background: #6852E8; }
+  </style>
+</head>
+<body>
+  <h1>RepoComments Icon Generator</h1>
+  <p>Right-click each canvas and "Save image as..." to the icons/ folder</p>
+
+  <div>
+    <h3>16x16</h3>
+    <canvas id="icon16" width="16" height="16"></canvas>
+  </div>
+
+  <div>
+    <h3>32x32</h3>
+    <canvas id="icon32" width="32" height="32"></canvas>
+  </div>
+
+  <div>
+    <h3>48x48</h3>
+    <canvas id="icon48" width="48" height="48"></canvas>
+  </div>
+
+  <div>
+    <h3>128x128</h3>
+    <canvas id="icon128" width="128" height="128"></canvas>
+  </div>
+
+  <script>
+    // Generate icons at different sizes
+    [16, 32, 48, 128].forEach(size => {
+      const canvas = document.getElementById(`icon${size}`);
+      const ctx = canvas.getContext('2d');
+
+      // Background circle
+      ctx.fillStyle = '#7B61FF';
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Comment bubble
+      const scale = size / 48;
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+
+      // Bubble body
+      const x = size/2 - (8 * scale);
+      const y = size/2 - (5 * scale);
+      const w = 16 * scale;
+      const h = 10 * scale;
+      const r = 2 * scale;
+
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + (w/2) + (2*scale), y + h);
+      ctx.lineTo(x + (w/2), y + h + (3*scale));
+      ctx.lineTo(x + (w/2) - (2*scale), y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.fill();
+    });
+  </script>
+</body>
+</html>

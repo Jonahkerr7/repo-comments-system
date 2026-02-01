@@ -1,0 +1,213 @@
+# GitHub Action to auto-register deployments with RepoComments
+#
+# This workflow runs after a deployment and:
+# 1. Registers the preview URL for auto-detection
+# 2. Creates a deployment entry for tracking iterations/collaboration
+#
+# Setup:
+# 1. Add REPOCOMMENTS_API_URL secret (e.g., https://api.repocomments.com)
+# 2. Add REPOCOMMENTS_API_TOKEN secret (get from admin dashboard)
+# 3. Modify your deployment job to output the preview URL
+
+name: Register Deployment
+
+on:
+  # Option 1: Run on deployment status changes (works with Vercel, Netlify, etc.)
+  deployment_status:
+
+  # Option 2: Run after deployment workflow completes
+  workflow_run:
+    workflows: ["Deploy", "Vercel", "Netlify"]
+    types: [completed]
+
+  # Option 3: Run on pull request
+  pull_request:
+    types: [opened, synchronize]
+
+  # Option 4: Manual trigger
+  workflow_dispatch:
+    inputs:
+      preview_url:
+        description: 'Preview URL to register'
+        required: true
+      environment:
+        description: 'Environment (preview/staging/production)'
+        default: 'preview'
+
+jobs:
+  register-deployment:
+    runs-on: ubuntu-latest
+    # Only run if deployment succeeded
+    if: |
+      github.event.deployment_status.state == 'success' ||
+      github.event.workflow_run.conclusion == 'success' ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Get Deployment Info
+        id: deployment-info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Get preview URL
+          if [ -n "${{ github.event.deployment_status.target_url }}" ]; then
+            echo "preview_url=${{ github.event.deployment_status.target_url }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ github.event.inputs.preview_url }}" ]; then
+            echo "preview_url=${{ github.event.inputs.preview_url }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Get environment
+          if [ -n "${{ github.event.deployment_status.environment }}" ]; then
+            echo "environment=${{ github.event.deployment_status.environment }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ github.event.inputs.environment }}" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=preview" >> $GITHUB_OUTPUT
+          fi
+
+          # Get PR info if available
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+            echo "pr_title=${{ github.event.pull_request.title }}" >> $GITHUB_OUTPUT
+            echo "pr_author=${{ github.event.pull_request.user.login }}" >> $GITHUB_OUTPUT
+            echo "branch=${{ github.event.pull_request.head.ref }}" >> $GITHUB_OUTPUT
+            echo "commit_sha=${{ github.event.pull_request.head.sha }}" >> $GITHUB_OUTPUT
+          else
+            echo "branch=${{ github.head_ref || github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "commit_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+          # Get commit message
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")
+          echo "commit_message=${COMMIT_MSG}" >> $GITHUB_OUTPUT
+
+      - name: Get PR Info from API
+        id: pr-info
+        if: github.event_name == 'deployment_status'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Try to find associated PR
+          PR_DATA=$(gh api repos/${{ github.repository }}/pulls \
+            --jq '.[] | select(.head.sha == "${{ github.sha }}") | {number, title, user: .user.login, branch: .head.ref}' \
+            2>/dev/null || echo "")
+
+          if [ -n "$PR_DATA" ]; then
+            echo "pr_number=$(echo $PR_DATA | jq -r '.number')" >> $GITHUB_OUTPUT
+            echo "pr_title=$(echo $PR_DATA | jq -r '.title')" >> $GITHUB_OUTPUT
+            echo "pr_author=$(echo $PR_DATA | jq -r '.user')" >> $GITHUB_OUTPUT
+            echo "branch=$(echo $PR_DATA | jq -r '.branch')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Deployment Entry
+        if: steps.deployment-info.outputs.preview_url != ''
+        env:
+          API_URL: ${{ secrets.REPOCOMMENTS_API_URL }}
+          API_TOKEN: ${{ secrets.REPOCOMMENTS_API_TOKEN }}
+        run: |
+          # Prepare deployment data
+          DEPLOYMENT_DATA=$(jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg branch "${{ steps.deployment-info.outputs.branch || steps.pr-info.outputs.branch || github.ref_name }}" \
+            --arg commit_sha "${{ steps.deployment-info.outputs.commit_sha || github.sha }}" \
+            --arg commit_message "${{ steps.deployment-info.outputs.commit_message }}" \
+            --arg url "${{ steps.deployment-info.outputs.preview_url }}" \
+            --arg environment "${{ steps.deployment-info.outputs.environment }}" \
+            --arg provider "${{ github.event.deployment_status.creator.login || 'github-actions' }}" \
+            --argjson pr_number "${{ steps.deployment-info.outputs.pr_number || steps.pr-info.outputs.pr_number || 'null' }}" \
+            --arg pr_title "${{ steps.deployment-info.outputs.pr_title || steps.pr-info.outputs.pr_title || '' }}" \
+            --arg pr_author "${{ steps.deployment-info.outputs.pr_author || steps.pr-info.outputs.pr_author || '' }}" \
+            '{
+              repo: $repo,
+              branch: $branch,
+              commit_sha: $commit_sha,
+              commit_message: $commit_message,
+              url: $url,
+              environment: $environment,
+              provider: $provider,
+              pr_number: (if $pr_number == "null" or $pr_number == "" then null else ($pr_number | tonumber) end),
+              pr_title: (if $pr_title == "" then null else $pr_title end),
+              pr_author: (if $pr_author == "" then null else $pr_author end),
+              status: "deployed",
+              review_status: "pending"
+            }')
+
+          echo "Creating deployment with data:"
+          echo "$DEPLOYMENT_DATA" | jq .
+
+          # Create the deployment entry
+          RESPONSE=$(curl -s -X POST "${API_URL}/api/v1/deployments" \
+            -H "Authorization: Bearer ${API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$DEPLOYMENT_DATA")
+
+          echo "API Response: $RESPONSE"
+
+          # Check for success
+          if echo "$RESPONSE" | jq -e '.id' > /dev/null 2>&1; then
+            DEPLOYMENT_ID=$(echo "$RESPONSE" | jq -r '.id')
+            echo "Successfully created deployment: $DEPLOYMENT_ID"
+            echo "deployment_id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+          else
+            echo "Warning: Deployment creation may have failed"
+            echo "$RESPONSE"
+          fi
+
+      - name: Register URL Pattern
+        if: steps.deployment-info.outputs.preview_url != ''
+        env:
+          API_URL: ${{ secrets.REPOCOMMENTS_API_URL }}
+          API_TOKEN: ${{ secrets.REPOCOMMENTS_API_TOKEN }}
+        run: |
+          # Also register as a URL pattern for future auto-detection
+          curl -s -X POST "${API_URL}/api/v1/repo-urls" \
+            -H "Authorization: Bearer ${API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"repo\": \"${{ github.repository }}\",
+              \"url_pattern\": \"${{ steps.deployment-info.outputs.preview_url }}\",
+              \"environment\": \"${{ steps.deployment-info.outputs.environment }}\",
+              \"branch\": \"${{ steps.deployment-info.outputs.branch || steps.pr-info.outputs.branch }}\",
+              \"description\": \"Auto-registered from deployment\"
+            }" || echo "URL pattern may already exist"
+
+      - name: Add PR Comment with Deployment Link
+        if: |
+          (steps.deployment-info.outputs.pr_number != '' || steps.pr-info.outputs.pr_number != '') &&
+          steps.deployment-info.outputs.preview_url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DASHBOARD_URL: ${{ secrets.REPOCOMMENTS_DASHBOARD_URL }}
+        run: |
+          PR_NUM="${{ steps.deployment-info.outputs.pr_number || steps.pr-info.outputs.pr_number }}"
+          PREVIEW_URL="${{ steps.deployment-info.outputs.preview_url }}"
+
+          COMMENT_BODY="## RepoComments Deployment
+
+Your preview is ready for collaboration:
+
+| | |
+|---|---|
+| Preview | [Open Preview]($PREVIEW_URL) |
+| Collaborate | Leave comments directly on the preview with the Chrome extension |
+${DASHBOARD_URL:+| Dashboard | [View in Dashboard]($DASHBOARD_URL) |}
+
+---
+*Powered by [RepoComments](https://github.com/your-org/repo-comments-system)*"
+
+          # Check if we already commented on this PR
+          EXISTING=$(gh api repos/${{ github.repository }}/issues/${PR_NUM}/comments \
+            --jq '.[] | select(.body | contains("RepoComments Deployment")) | .id' | head -1)
+
+          if [ -n "$EXISTING" ]; then
+            # Update existing comment
+            gh api repos/${{ github.repository }}/issues/comments/${EXISTING} \
+              -X PATCH -f body="$COMMENT_BODY"
+            echo "Updated existing PR comment"
+          else
+            # Create new comment
+            gh api repos/${{ github.repository }}/issues/${PR_NUM}/comments \
+              -f body="$COMMENT_BODY"
+            echo "Created new PR comment"
+          fi

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Successful - RepoComments</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #F8F9FA;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .success-box {
+            background: white;
+            padding: 48px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+        }
+        .checkmark {
+            font-size: 64px;
+            color: #00C853;
+            margin-bottom: 24px;
+        }
+        h1 {
+            color: #7B61FF;
+            margin-bottom: 16px;
+        }
+        p {
+            color: #6F6F6F;
+            margin-bottom: 24px;
+        }
+        .token-display {
+            background: #F5F5F5;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+            margin-bottom: 24px;
+        }
+        .redirect-message {
+            color: #7B61FF;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="success-box">
+        <div class="checkmark">✅</div>
+        <h1>Login Successful!</h1>
+        <p>You've been authenticated with GitHub.</p>
+        <p class="redirect-message">Redirecting you back to the app...</p>
+    </div>
+
+    <script>
+        // Get token from URL
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token');
+
+        if (token) {
+            // Store token in localStorage
+            localStorage.setItem('repo-comments-token', token);
+            console.log('✅ Token stored:', token);
+
+            // Redirect back to main page after 2 seconds
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+        } else {
+            document.querySelector('.redirect-message').textContent = 'No token received. Redirecting...';
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

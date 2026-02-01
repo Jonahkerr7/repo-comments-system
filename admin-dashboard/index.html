@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RepoComments Admin Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Top Navigation -->
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <h1>RepoComments Admin</h1>
+    </div>
+    <div class="nav-user">
+      <div class="user-info" id="user-info"></div>
+      <button class="btn-logout" id="logout-btn">Logout</button>
+    </div>
+  </nav>
+
+  <div class="dashboard-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <nav class="sidebar-nav">
+        <a href="#dashboard" class="nav-item active" data-page="dashboard">
+          <span class="icon">📊</span>
+          Dashboard
+        </a>
+        <a href="#teams" class="nav-item" data-page="teams">
+          <span class="icon">👥</span>
+          Teams
+        </a>
+        <a href="#users" class="nav-item" data-page="users">
+          <span class="icon">👤</span>
+          Users
+        </a>
+        <a href="#repositories" class="nav-item" data-page="repositories">
+          <span class="icon">📦</span>
+          Repositories
+        </a>
+        <a href="#iterations" class="nav-item" data-page="iterations">
+          <span class="icon">🚀</span>
+          Iterations
+        </a>
+        <a href="#comments" class="nav-item" data-page="comments">
+          <span class="icon">💬</span>
+          All Comments
+        </a>
+        <a href="#settings" class="nav-item" data-page="settings">
+          <span class="icon">⚙️</span>
+          Settings
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Dashboard Overview Page -->
+      <section id="page-dashboard" class="page active">
+        <h2>Dashboard Overview</h2>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>Total Users</h3>
+            <p class="stat-number" id="stat-users">-</p>
+          </div>
+          <div class="stat-card">
+            <h3>Total Teams</h3>
+            <p class="stat-number" id="stat-teams">-</p>
+          </div>
+          <div class="stat-card">
+            <h3>Active Comments</h3>
+            <p class="stat-number" id="stat-comments">-</p>
+          </div>
+          <div class="stat-card">
+            <h3>Repositories</h3>
+            <p class="stat-number" id="stat-repos">-</p>
+          </div>
+        </div>
+
+        <div class="recent-activity">
+          <h3>Recent Activity</h3>
+          <div id="recent-activity-list" class="activity-list"></div>
+        </div>
+      </section>
+
+      <!-- Teams Page -->
+      <section id="page-teams" class="page">
+        <div class="page-header">
+          <h2>Teams</h2>
+          <button class="btn-primary" id="btn-create-team">Create Team</button>
+        </div>
+
+        <div class="teams-list" id="teams-list"></div>
+      </section>
+
+      <!-- Users Page -->
+      <section id="page-users" class="page">
+        <div class="page-header">
+          <h2>Users</h2>
+          <button class="btn-primary" id="btn-invite-user">Invite User</button>
+        </div>
+
+        <div class="users-table-container">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Provider</th>
+                <th>Joined</th>
+                <th>Teams</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Repositories Page -->
+      <section id="page-repositories" class="page">
+        <div class="page-header">
+          <h2>Repositories</h2>
+          <button class="btn-primary" id="btn-add-repo">Connect Repository</button>
+        </div>
+
+        <p class="page-description">Connect your repositories to enable commenting. Branches and URLs are auto-discovered when GitHub Actions sends deployment info.</p>
+
+        <div class="repos-list" id="repos-list"></div>
+
+        <div class="discovered-branches-section">
+          <div class="section-header">
+            <h3>Active Branches</h3>
+            <p class="section-description">Branches discovered from recent deployments. These update automatically.</p>
+          </div>
+          <div class="branches-list" id="branches-list"></div>
+        </div>
+
+        <div class="url-mappings-section">
+          <div class="section-header">
+            <h3>URL Mappings</h3>
+            <p class="section-description">Auto-registered from deployments. Add manual mappings for custom domains.</p>
+            <button class="btn-secondary btn-small" id="btn-add-url-mapping">Add Manual Mapping</button>
+          </div>
+
+          <div class="url-mappings-list" id="url-mappings-list"></div>
+        </div>
+      </section>
+
+      <!-- Iterations/Deployments Page -->
+      <section id="page-iterations" class="page">
+        <div class="page-header">
+          <h2>Iterations & Deployments</h2>
+          <div class="filters">
+            <select id="filter-iteration-repo" class="filter-select">
+              <option value="">All Repositories</option>
+            </select>
+            <select id="filter-iteration-status" class="filter-select">
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="building">Building</option>
+              <option value="deployed">Deployed</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="approved">Approved</option>
+              <option value="closed">Closed</option>
+            </select>
+            <select id="filter-iteration-env" class="filter-select">
+              <option value="">All Environments</option>
+              <option value="preview">Preview</option>
+              <option value="staging">Staging</option>
+              <option value="production">Production</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="iterations-stats" id="iterations-stats">
+          <div class="stat-card small">
+            <h4>Active</h4>
+            <p class="stat-number" id="stat-active-deployments">-</p>
+          </div>
+          <div class="stat-card small">
+            <h4>Pending Review</h4>
+            <p class="stat-number" id="stat-pending-review">-</p>
+          </div>
+          <div class="stat-card small">
+            <h4>Open Threads</h4>
+            <p class="stat-number" id="stat-open-threads">-</p>
+          </div>
+          <div class="stat-card small">
+            <h4>Approved Today</h4>
+            <p class="stat-number" id="stat-approved-today">-</p>
+          </div>
+        </div>
+
+        <div class="iterations-list" id="iterations-list"></div>
+      </section>
+
+      <!-- Comments Page -->
+      <section id="page-comments" class="page">
+        <div class="page-header">
+          <h2>All Comments</h2>
+          <div class="filters">
+            <select id="filter-repo" class="filter-select">
+              <option value="">All Repositories</option>
+            </select>
+            <select id="filter-status" class="filter-select">
+              <option value="">All Statuses</option>
+              <option value="open">Open</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="comments-list" id="comments-list"></div>
+      </section>
+
+      <!-- Settings Page -->
+      <section id="page-settings" class="page">
+        <h2>Settings</h2>
+
+        <div class="settings-section">
+          <h3>Organization Settings</h3>
+          <form id="org-settings-form">
+            <div class="form-group">
+              <label>Organization Name</label>
+              <input type="text" id="org-name" placeholder="acme-corp">
+            </div>
+            <div class="form-group">
+              <label>Default Repository Visibility</label>
+              <select id="default-visibility">
+                <option value="private">Private</option>
+                <option value="team">Team</option>
+                <option value="public">Public</option>
+              </select>
+            </div>
+            <button type="submit" class="btn-primary">Save Settings</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modals -->
+
+  <!-- Create Team Modal -->
+  <div id="modal-create-team" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Create New Team</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="form-create-team">
+        <div class="form-group">
+          <label>Team Name</label>
+          <input type="text" name="name" required placeholder="Engineering Team">
+        </div>
+        <div class="form-group">
+          <label>Organization</label>
+          <input type="text" name="org" required placeholder="acme-corp">
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea name="description" placeholder="Optional description"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary modal-close">Cancel</button>
+          <button type="submit" class="btn-primary">Create Team</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Repository Modal -->
+  <div id="modal-add-repo" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Connect Repository</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="connect-repo-info">
+        <p>After connecting, add the GitHub Action to auto-register deployments:</p>
+        <ol>
+          <li>Copy <code>.github/workflows/register-preview-url.yml</code> to your repo</li>
+          <li>Add secrets: <code>REPOCOMMENTS_API_URL</code> and <code>REPOCOMMENTS_API_TOKEN</code></li>
+          <li>Every deployment will auto-register branches, URLs, and PR info</li>
+        </ol>
+      </div>
+      <form id="form-add-repo">
+        <div class="form-group">
+          <label>Repository Name</label>
+          <input type="text" name="repo" required placeholder="owner/repo-name">
+        </div>
+        <div class="form-group">
+          <label>Default Access Level for Team</label>
+          <select name="default_role">
+            <option value="read">Read - View comments only</option>
+            <option value="write" selected>Write - Add and resolve comments</option>
+            <option value="admin">Admin - Manage permissions</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary modal-close">Cancel</button>
+          <button type="submit" class="btn-primary">Connect Repository</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Manage Permissions Modal -->
+  <div id="modal-permissions" class="modal">
+    <div class="modal-content large">
+      <div class="modal-header">
+        <h3>Manage Permissions - <span id="permissions-repo-name"></span></h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="permissions-content">
+        <div class="permissions-section">
+          <h4>Team Permissions</h4>
+          <button class="btn-small btn-primary" id="btn-add-team-permission">Add Team</button>
+          <div id="team-permissions-list" class="permissions-list"></div>
+        </div>
+        <div class="permissions-section">
+          <h4>User Permissions</h4>
+          <button class="btn-small btn-primary" id="btn-add-user-permission">Add User</button>
+          <div id="user-permissions-list" class="permissions-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add URL Mapping Modal -->
+  <div id="modal-add-url" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Add URL Mapping</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="form-add-url">
+        <div class="form-group">
+          <label>Repository</label>
+          <input type="text" name="repo" required placeholder="acme-corp/design-system">
+          <small>Format: owner/repo-name</small>
+        </div>
+        <div class="form-group">
+          <label>URL Pattern</label>
+          <input type="text" name="url_pattern" required placeholder="https://staging.acme.com/*">
+          <small>Use * as wildcard. Example: https://*.preview.app/*</small>
+        </div>
+        <div class="form-group">
+          <label>Environment</label>
+          <select name="environment">
+            <option value="development">Development</option>
+            <option value="staging">Staging</option>
+            <option value="production">Production</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Description (optional)</label>
+          <input type="text" name="description" placeholder="Staging environment">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary modal-close">Cancel</button>
+          <button type="submit" class="btn-primary">Add Mapping</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Deployment Details Modal -->
+  <div id="modal-deployment" class="modal">
+    <div class="modal-content large">
+      <div class="modal-header">
+        <h3>Deployment Details</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="deployment-details">
+        <div class="deployment-header-info">
+          <div class="deployment-meta" id="deployment-meta"></div>
+          <div class="deployment-actions">
+            <button class="btn-primary" id="btn-launch-deployment">Launch</button>
+            <button class="btn-secondary" id="btn-approve-deployment">Approve</button>
+          </div>
+        </div>
+
+        <div class="deployment-stats-row">
+          <div class="mini-stat">
+            <span class="mini-stat-label">Comments</span>
+            <span class="mini-stat-value" id="deployment-comment-count">0</span>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-stat-label">Open Threads</span>
+            <span class="mini-stat-value" id="deployment-open-threads">0</span>
+          </div>
+          <div class="mini-stat">
+            <span class="mini-stat-label">Resolved</span>
+            <span class="mini-stat-value" id="deployment-resolved-threads">0</span>
+          </div>
+        </div>
+
+        <div class="deployment-activity-section">
+          <h4>Activity</h4>
+          <div id="deployment-activity-list" class="activity-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login Modal (shown if not authenticated) -->
+  <div id="modal-login" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Admin Login</h3>
+      </div>
+      <div class="login-content">
+        <p>Login with your GitHub account to access the admin dashboard.</p>
+        <button class="btn-primary btn-large" id="btn-github-login">Login with GitHub</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/teams.js"></script>
+  <script src="js/users.js"></script>
+  <script src="js/repos.js"></script>
+  <script src="js/iterations.js"></script>
+  <script src="js/comments.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
