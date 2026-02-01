@@ -2,7 +2,8 @@
 
 class API {
   constructor() {
-    this.baseURL = 'http://localhost:3000/api/v1';
+    // Use production API
+    this.baseURL = 'https://repo-comments-system-production.up.railway.app/api/v1';
     this.token = localStorage.getItem('admin_token');
   }
 

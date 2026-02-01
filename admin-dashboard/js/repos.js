@@ -4,6 +4,7 @@ class ReposManager {
   static repos = new Set();
   static githubRepos = [];
   static connectedRepos = new Set();
+  static repoUrls = new Map(); // repo -> url mapping
 
   static async loadRepos() {
     const reposList = document.getElementById('repos-list');
@@ -12,6 +13,20 @@ class ReposManager {
       // Get connected repos from permissions
       const permissions = await api.request('/permissions');
       this.connectedRepos = new Set(permissions.map(p => p.repo));
+
+      // Fetch repo URLs for launch buttons
+      try {
+        const urlMappings = await api.getRepoUrls();
+        this.repoUrls.clear();
+        urlMappings.forEach(m => {
+          // Prefer production URLs, but use any if not set
+          if (!this.repoUrls.has(m.repo) || m.environment === 'production') {
+            this.repoUrls.set(m.repo, m.url_pattern);
+          }
+        });
+      } catch (e) {
+        console.warn('Could not load repo URLs:', e);
+      }
 
       // Try to get GitHub repos
       let githubError = null;
@@ -101,7 +116,9 @@ class ReposManager {
 
   static renderGitHubRepoCard(repo) {
     const isConnected = this.connectedRepos.has(repo.full_name);
-    const previewUrl = `http://localhost:8080?repo=${encodeURIComponent(repo.full_name)}`;
+    // Use configured URL if available, otherwise fall back to localhost
+    const configuredUrl = this.repoUrls.get(repo.full_name);
+    const previewUrl = configuredUrl || `http://localhost:8080?repo=${encodeURIComponent(repo.full_name)}`;
 
     return `
       <div class="github-repo-card ${isConnected ? 'connected' : ''}" data-repo="${repo.full_name}">
@@ -158,7 +175,9 @@ class ReposManager {
   static renderRepoCard(repo, permissions = []) {
     const userPerms = permissions.filter(p => p.user_id);
     const teamPerms = permissions.filter(p => p.team_id);
-    const previewUrl = `http://localhost:8080?repo=${encodeURIComponent(repo)}`;
+    // Use configured URL if available, otherwise fall back to localhost
+    const configuredUrl = this.repoUrls.get(repo);
+    const previewUrl = configuredUrl || `http://localhost:8080?repo=${encodeURIComponent(repo)}`;
 
     return `
       <div class="repo-card" data-repo="${repo}">
@@ -297,7 +316,11 @@ class ReposManager {
     }
   }
 
-  // Active Branches (from deployments)
+  // Store all branches data for filtering
+  static allBranches = [];
+  static currentFilter = 'overview';
+
+  // Active Branches (from deployments + GitHub API)
   static async loadActiveBranches() {
     const branchesList = document.getElementById('branches-list');
 
@@ -305,17 +328,23 @@ class ReposManager {
       // Get deployments to discover branches
       const deployments = await api.getDeployments({ limit: 50 });
 
-      if (deployments.length === 0) {
-        branchesList.innerHTML = `
-          <div style="text-align: center; padding: 1.5rem; color: #a0aec0; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
-            <p>No branches discovered yet.</p>
-            <p style="margin-top: 0.5rem; font-size: 0.875rem;">Branches appear automatically when GitHub Actions sends deployment info.</p>
-          </div>
-        `;
-        return;
+      // Also try to get branches from GitHub API for connected repos
+      let githubBranches = [];
+      for (const repo of this.connectedRepos) {
+        try {
+          const [owner, repoName] = repo.split('/');
+          const branches = await api.getGitHubBranches(owner, repoName);
+          githubBranches = githubBranches.concat(branches.map(b => ({
+            ...b,
+            repo,
+            fromGitHub: true
+          })));
+        } catch (e) {
+          console.warn(`Could not fetch branches for ${repo}:`, e);
+        }
       }
 
-      // Group by repo and branch, get latest deployment for each
+      // Group deployments by repo and branch, get latest deployment for each
       const branchMap = new Map();
       deployments.forEach(d => {
         const key = `${d.repo}:${d.branch}`;
@@ -324,57 +353,154 @@ class ReposManager {
         }
       });
 
-      // Group by repo
-      const repoGroups = new Map();
+      // Merge GitHub branches with deployment data
+      const allBranchesData = [];
+
+      // Add deployed branches first
       branchMap.forEach((deployment, key) => {
-        const repo = deployment.repo;
-        if (!repoGroups.has(repo)) {
-          repoGroups.set(repo, []);
-        }
-        repoGroups.get(repo).push(deployment);
+        allBranchesData.push({
+          ...deployment,
+          hasDeployment: true,
+          isDefault: deployment.branch === 'main' || deployment.branch === 'master',
+          lastUpdated: new Date(deployment.deployed_at || deployment.created_at)
+        });
       });
 
-      branchesList.innerHTML = Array.from(repoGroups.entries())
-        .map(([repo, branches]) => this.renderBranchGroup(repo, branches))
-        .join('');
+      // Add GitHub branches that don't have deployments
+      githubBranches.forEach(ghBranch => {
+        const key = `${ghBranch.repo}:${ghBranch.name}`;
+        if (!branchMap.has(key)) {
+          allBranchesData.push({
+            repo: ghBranch.repo,
+            branch: ghBranch.name,
+            hasDeployment: false,
+            isDefault: ghBranch.name === 'main' || ghBranch.name === 'master',
+            lastUpdated: new Date(),
+            status: 'no-deployment',
+            fromGitHub: true
+          });
+        }
+      });
+
+      // Sort: default branches first, then by last updated
+      allBranchesData.sort((a, b) => {
+        if (a.isDefault && !b.isDefault) return -1;
+        if (!a.isDefault && b.isDefault) return 1;
+        return b.lastUpdated - a.lastUpdated;
+      });
+
+      this.allBranches = allBranchesData;
+      this.renderBranchesTable(this.currentFilter);
+      this.attachBranchTabListeners();
 
     } catch (error) {
       console.error('Error loading branches:', error);
       branchesList.innerHTML = `
-        <div style="text-align: center; padding: 1.5rem; color: #f56565;">
+        <tr><td colspan="6" class="branches-empty">
           <p>Error loading branches.</p>
-        </div>
+        </td></tr>
       `;
     }
   }
 
-  static renderBranchGroup(repo, branches) {
-    return `
-      <div class="branch-group">
-        <h4 class="branch-repo-name">${repo}</h4>
-        <div class="branch-items">
-          ${branches.map(b => this.renderBranchItem(b)).join('')}
-        </div>
-      </div>
-    `;
+  static attachBranchTabListeners() {
+    document.querySelectorAll('.branch-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        document.querySelectorAll('.branch-tab').forEach(t => t.classList.remove('active'));
+        e.target.classList.add('active');
+        this.currentFilter = e.target.dataset.filter;
+        this.renderBranchesTable(this.currentFilter);
+      });
+    });
   }
 
-  static renderBranchItem(deployment) {
-    const timeAgo = this.formatTimeAgo(deployment.deployed_at || deployment.created_at);
-    const isMain = deployment.branch === 'main' || deployment.branch === 'master';
+  static renderBranchesTable(filter = 'overview') {
+    const branchesList = document.getElementById('branches-list');
+
+    let filteredBranches = [...this.allBranches];
+    const now = new Date();
+    const oneWeekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    const oneMonthAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+    switch (filter) {
+      case 'active':
+        filteredBranches = filteredBranches.filter(b => b.lastUpdated > oneWeekAgo);
+        break;
+      case 'stale':
+        filteredBranches = filteredBranches.filter(b => b.lastUpdated < oneMonthAgo);
+        break;
+      case 'overview':
+        // Show default branches + recent active
+        filteredBranches = filteredBranches.filter(b => b.isDefault || b.lastUpdated > oneWeekAgo);
+        break;
+      case 'all':
+      default:
+        // Show all
+        break;
+    }
+
+    if (filteredBranches.length === 0) {
+      branchesList.innerHTML = `
+        <tr><td colspan="6" class="branches-empty">
+          <p>No branches found.</p>
+          <p>Branches appear when GitHub Actions sends deployment info.</p>
+        </td></tr>
+      `;
+      return;
+    }
+
+    branchesList.innerHTML = filteredBranches.map(b => this.renderBranchRow(b)).join('');
+  }
+
+  static renderBranchRow(branch) {
+    const timeAgo = this.formatTimeAgo(branch.deployed_at || branch.created_at || branch.lastUpdated);
+    const isDefault = branch.isDefault;
+    const hasDeployment = branch.hasDeployment;
+
+    // Status icon
+    let statusIcon = '';
+    if (hasDeployment) {
+      if (branch.status === 'deployed') {
+        statusIcon = '<span class="status-icon success" title="Deployed">&#10003;</span>';
+      } else if (branch.status === 'failed') {
+        statusIcon = '<span class="status-icon failure" title="Failed">&#10007;</span>';
+      } else {
+        statusIcon = '<span class="status-icon pending" title="Pending">&#8226;</span>';
+      }
+    } else {
+      statusIcon = '<span class="status-icon" style="color: #8b949e;" title="No deployment">-</span>';
+    }
+
+    // Environment badge
+    const envBadge = branch.environment
+      ? `<span class="env-badge env-${branch.environment}">${branch.environment}</span>`
+      : '<span style="color: #8b949e;">-</span>';
+
+    // PR link
+    const prLink = branch.pr_number
+      ? `<a href="https://github.com/${branch.repo}/pull/${branch.pr_number}" target="_blank" class="branch-pr-link">#${branch.pr_number}</a>`
+      : '<span style="color: #8b949e;">-</span>';
+
+    // Launch button
+    const launchBtn = hasDeployment && branch.url
+      ? `<a href="${branch.url}" target="_blank" class="btn-launch">Launch</a>`
+      : '';
 
     return `
-      <div class="branch-item ${isMain ? 'branch-main' : ''}">
-        <div class="branch-info">
-          <span class="branch-name">${deployment.branch}</span>
-          ${deployment.pr_number ? `<span class="branch-pr">#${deployment.pr_number}</span>` : ''}
-          <span class="branch-time">${timeAgo}</span>
-        </div>
-        <div class="branch-actions">
-          <span class="env-badge env-${deployment.environment}">${deployment.environment}</span>
-          <a href="${deployment.url}" target="_blank" class="btn-small btn-primary">Launch</a>
-        </div>
-      </div>
+      <tr class="${isDefault ? 'default-branch' : ''}" data-repo="${branch.repo}" data-branch="${branch.branch}">
+        <td>
+          <div class="branch-name-cell">
+            <span class="branch-name">${branch.branch}</span>
+            ${isDefault ? '<span class="default-badge">Default</span>' : ''}
+          </div>
+          <div style="font-size: 0.75rem; color: #57606a; margin-top: 0.25rem;">${branch.repo}</div>
+        </td>
+        <td><span class="branch-time">${timeAgo}</span></td>
+        <td>${statusIcon}</td>
+        <td>${envBadge}</td>
+        <td>${prLink}</td>
+        <td class="branch-actions">${launchBtn}</td>
+      </tr>
     `;
   }
 

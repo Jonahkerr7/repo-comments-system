@@ -129,12 +129,32 @@
 
         <div class="repos-list" id="repos-list"></div>
 
-        <div class="discovered-branches-section">
-          <div class="section-header">
-            <h3>Active Branches</h3>
-            <p class="section-description">Branches discovered from recent deployments. These update automatically.</p>
+        <div class="branches-section">
+          <div class="branches-header">
+            <h3>Branches</h3>
+            <div class="branches-tabs">
+              <button class="branch-tab active" data-filter="overview">Overview</button>
+              <button class="branch-tab" data-filter="active">Active</button>
+              <button class="branch-tab" data-filter="stale">Stale</button>
+              <button class="branch-tab" data-filter="all">All</button>
+            </div>
           </div>
-          <div class="branches-list" id="branches-list"></div>
+
+          <div class="branches-table-container">
+            <table class="branches-table" id="branches-table">
+              <thead>
+                <tr>
+                  <th>Branch</th>
+                  <th>Updated</th>
+                  <th>Status</th>
+                  <th>Environment</th>
+                  <th>Pull request</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="branches-list"></tbody>
+            </table>
+          </div>
         </div>
 
         <div class="url-mappings-section">
