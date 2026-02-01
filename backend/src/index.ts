@@ -26,8 +26,10 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
 const HOST = process.env.HOST || 'localhost';
 
-// Security middleware - disable CSP for widget files
+// Security middleware - allow widget to be loaded cross-origin
 app.use('/widget', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.removeHeader('Content-Security-Policy');
   next();
 });
