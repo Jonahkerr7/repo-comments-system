@@ -207,7 +207,7 @@ class API {
   }
 
   async getDeploymentStats() {
-    return this.request('/deployments/stats/overview');
+    return this.request('/deployments/stats/summary');
   }
 
   async logDeploymentActivity(id, action, details = null) {
