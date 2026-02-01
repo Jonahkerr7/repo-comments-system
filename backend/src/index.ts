@@ -123,12 +123,14 @@ app.get('/health', (req, res) => {
 
 // Debug endpoint to check env vars
 app.get('/debug/env', (req, res) => {
+  const secret = process.env.GITHUB_CLIENT_SECRET;
   res.json({
     NODE_ENV: process.env.NODE_ENV,
-    GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ? 'SET' : 'NOT SET',
-    GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET ? 'SET' : 'NOT SET',
+    GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ? 'SET (' + process.env.GITHUB_CLIENT_ID.substring(0, 4) + '...)' : 'NOT SET',
+    GITHUB_CLIENT_SECRET: secret ? 'SET (len=' + secret.length + ')' : 'NOT SET (type=' + typeof secret + ', val=' + JSON.stringify(secret) + ')',
     GITHUB_CALLBACK_URL: process.env.GITHUB_CALLBACK_URL ? 'SET' : 'NOT SET',
     DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET',
+    ALL_GITHUB_VARS: Object.keys(process.env).filter(k => k.includes('GITHUB')).join(', '),
   });
 });
 
