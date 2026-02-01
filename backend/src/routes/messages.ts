@@ -27,7 +27,7 @@ router.post(
     }
 
     const { threadId } = req.params;
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
     const data: CreateMessageRequest = req.body;
 
     try {
@@ -157,7 +157,7 @@ router.patch(
 
     const { threadId, messageId } = req.params;
     const { content } = req.body;
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
 
     try {
       // Verify message exists and user is the author
@@ -217,7 +217,7 @@ router.delete(
   authenticate,
   async (req, res) => {
     const { threadId, messageId } = req.params;
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
 
     try {
       // Verify message exists
@@ -287,7 +287,7 @@ router.post(
 
     const { messageId } = req.params;
     const { emoji } = req.body;
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
 
     try {
       const result = await query(
@@ -332,7 +332,7 @@ router.delete(
   authenticate,
   async (req, res) => {
     const { messageId, emoji } = req.params;
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
 
     try {
       // Get thread for broadcasting before deletion

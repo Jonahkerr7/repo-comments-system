@@ -33,7 +33,7 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
     const data: CreateThreadRequest = req.body;
 
     try {
@@ -244,7 +244,7 @@ router.patch(
     }
 
     const { id } = req.params;
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
     const updates: UpdateThreadRequest = req.body;
 
     try {
@@ -334,7 +334,7 @@ router.patch(
 // Delete thread
 router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
   const { id } = req.params;
-  const authReq = req as AuthenticatedRequest;
+  const authReq = req as unknown as AuthenticatedRequest;
 
   try {
     const result = await query('DELETE FROM threads WHERE id = $1 RETURNING id', [id]);

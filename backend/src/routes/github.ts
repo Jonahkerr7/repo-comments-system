@@ -8,7 +8,7 @@ const router = Router();
 
 // Get user's GitHub repositories
 router.get('/repos', authenticate, async (req, res) => {
-  const authReq = req as AuthenticatedRequest;
+  const authReq = req as unknown as AuthenticatedRequest;
 
   try {
     // Get user's GitHub token
@@ -45,7 +45,7 @@ router.get('/repos', authenticate, async (req, res) => {
       throw new Error(`GitHub API error: ${response.status}`);
     }
 
-    const repos = await response.json();
+    const repos = await response.json() as any[];
 
     // Return simplified repo info
     const simplifiedRepos = repos.map((repo: any) => ({
@@ -70,7 +70,7 @@ router.get('/repos', authenticate, async (req, res) => {
 
 // Get branches for a specific repo
 router.get('/repos/:owner/:repo/branches', authenticate, async (req, res) => {
-  const authReq = req as AuthenticatedRequest;
+  const authReq = req as unknown as AuthenticatedRequest;
   const { owner, repo } = req.params;
 
   try {
@@ -100,7 +100,7 @@ router.get('/repos/:owner/:repo/branches', authenticate, async (req, res) => {
       throw new Error(`GitHub API error: ${response.status}`);
     }
 
-    const branches = await response.json();
+    const branches = await response.json() as any[];
 
     res.json(branches.map((b: any) => ({
       name: b.name,
@@ -114,7 +114,7 @@ router.get('/repos/:owner/:repo/branches', authenticate, async (req, res) => {
 
 // Quick connect a repo (creates permission entry)
 router.post('/connect', authenticate, async (req, res) => {
-  const authReq = req as AuthenticatedRequest;
+  const authReq = req as unknown as AuthenticatedRequest;
   const { repo, default_role = 'write' } = req.body;
 
   if (!repo) {

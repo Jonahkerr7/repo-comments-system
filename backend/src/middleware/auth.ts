@@ -35,7 +35,7 @@ export async function authenticate(
       return;
     }
 
-    (req as AuthenticatedRequest).user = result.rows[0];
+    (req as unknown as AuthenticatedRequest).user = result.rows[0];
     next();
   } catch (error) {
     logger.error('Authentication error', error);
@@ -49,7 +49,7 @@ export function authorize(requiredRole: 'admin' | 'write' | 'read') {
     res: Response,
     next: NextFunction
   ): Promise<void> => {
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
     const repo = req.params.repo || req.body.repo || req.query.repo;
 
     if (!authReq.user) {
@@ -120,7 +120,7 @@ export function optionalAuth(
     query<User>('SELECT * FROM users WHERE id = $1', [payload.id])
       .then((result) => {
         if (result.rows.length > 0) {
-          (req as AuthenticatedRequest).user = result.rows[0];
+          (req as unknown as AuthenticatedRequest).user = result.rows[0];
         }
         next();
       })

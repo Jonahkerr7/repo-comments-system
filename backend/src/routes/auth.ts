@@ -89,7 +89,7 @@ router.get(
 
 // Get current user
 router.get('/user', authenticate, async (req, res) => {
-  const authReq = req as AuthenticatedRequest;
+  const authReq = req as unknown as AuthenticatedRequest;
   res.json({
     id: authReq.user!.id,
     email: authReq.user!.email,

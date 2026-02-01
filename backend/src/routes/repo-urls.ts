@@ -86,7 +86,7 @@ router.post(
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
     const { repo, url_pattern, environment, branch, description } = req.body;
 
     try {

@@ -10,7 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-in-productio
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export function generateToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload as object, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as any);
 }
 
 export function verifyToken(token: string): JWTPayload {

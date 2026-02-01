@@ -199,7 +199,7 @@ router.patch(
     }
 
     const { id } = req.params;
-    const authReq = req as AuthenticatedRequest;
+    const authReq = req as unknown as AuthenticatedRequest;
     const updates = req.body;
 
     try {
@@ -258,7 +258,7 @@ router.patch(
 // Log a view (track who's looking at deployments)
 router.post('/:id/view', authenticate, async (req, res) => {
   const { id } = req.params;
-  const authReq = req as AuthenticatedRequest;
+  const authReq = req as unknown as AuthenticatedRequest;
 
   try {
     await query(
