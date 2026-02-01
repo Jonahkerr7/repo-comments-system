@@ -26,15 +26,19 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
 const HOST = process.env.HOST || 'localhost';
 
-// Security middleware - allow widget to be loaded cross-origin
+// Serve widget files BEFORE helmet (to avoid CORP restrictions)
+const widgetPath = process.env.NODE_ENV === 'production'
+  ? path.join(process.cwd(), 'widget')
+  : path.join(__dirname, '../widget');
 app.use('/widget', (req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.removeHeader('Content-Security-Policy');
   next();
-});
+}, express.static(widgetPath));
+
+// Security middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable CSP to allow widget embedding
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
 
@@ -116,13 +120,6 @@ app.get('/health', (req, res) => {
     uptime: process.uptime(),
   });
 });
-
-// Serve widget files
-// In production (Docker): /app/widget, in dev: relative to dist folder
-const widgetPath = process.env.NODE_ENV === 'production'
-  ? path.join(process.cwd(), 'widget')
-  : path.join(__dirname, '../widget');
-app.use('/widget', express.static(widgetPath));
 
 // API routes
 app.use('/api/v1/auth', authRoutes);
