@@ -9,7 +9,7 @@ const router = Router();
 
 // Get all deployments (with filters)
 router.get('/', authenticate, async (req, res) => {
-  const { repo, branch, status, environment, limit = '20', offset = '0' } = req.query;
+  const { repo, branch, status, environment, phase, limit = '20', offset = '0' } = req.query;
 
   try {
     let queryText = `
@@ -46,6 +46,12 @@ router.get('/', authenticate, async (req, res) => {
     if (environment) {
       queryText += ` AND d.environment = $${paramIndex}`;
       params.push(environment);
+      paramIndex++;
+    }
+
+    if (phase) {
+      queryText += ` AND d.phase = $${paramIndex}`;
+      params.push(phase);
       paramIndex++;
     }
 
@@ -183,7 +189,7 @@ router.post(
   }
 );
 
-// Update deployment status
+// Update deployment status or phase
 router.patch(
   '/:id',
   authenticate,
@@ -191,6 +197,7 @@ router.patch(
     param('id').isUUID(),
     body('status').optional().isIn(['pending', 'building', 'deployed', 'reviewed', 'approved', 'closed']),
     body('review_status').optional().isIn(['pending', 'in_review', 'changes_requested', 'approved']),
+    body('phase').optional().isIn(['discover', 'define', 'develop', 'deliver']),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -229,6 +236,16 @@ router.patch(
         paramIndex++;
       }
 
+      if (updates.phase !== undefined) {
+        setClauses.push(`phase = $${paramIndex}`);
+        params.push(updates.phase);
+        paramIndex++;
+        setClauses.push(`phase_changed_at = NOW()`);
+        setClauses.push(`phase_changed_by = $${paramIndex}`);
+        params.push(authReq.user!.id);
+        paramIndex++;
+      }
+
       params.push(id);
       const result = await query(
         `UPDATE deployments SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
@@ -240,10 +257,11 @@ router.patch(
       }
 
       // Log activity
+      const action = updates.phase !== undefined ? 'phase_changed' : 'status_changed';
       await query(
         `INSERT INTO deployment_activity (deployment_id, user_id, action, details)
          VALUES ($1, $2, $3, $4)`,
-        [id, authReq.user!.id, 'status_changed', JSON.stringify(updates)]
+        [id, authReq.user!.id, action, JSON.stringify(updates)]
       );
 
       logger.info('Deployment updated', { id, updates });
@@ -303,6 +321,51 @@ router.get('/stats/summary', authenticate, async (req, res) => {
   } catch (error) {
     logger.error('Error fetching deployment stats', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+// Get kanban stats (counts per phase for Double Diamond board)
+router.get('/stats/kanban', authenticate, async (req, res) => {
+  const { repo } = req.query;
+
+  try {
+    let whereClause = "WHERE status != 'closed'";
+    const params: any[] = [];
+
+    if (repo) {
+      whereClause += ' AND repo = $1';
+      params.push(repo);
+    }
+
+    const result = await query(
+      `SELECT
+        COALESCE(phase, 'discover') as phase,
+        COUNT(*) as count,
+        COUNT(*) FILTER (WHERE review_status = 'pending') as pending_review,
+        COALESCE(SUM(open_threads), 0) as open_threads
+       FROM deployments
+       ${whereClause}
+       GROUP BY phase`,
+      params
+    );
+
+    // Return structured data for all phases
+    const phases = ['discover', 'define', 'develop', 'deliver'];
+    const stats: Record<string, { count: number; pending_review: number; open_threads: number }> = {};
+
+    phases.forEach(p => {
+      const row = result.rows.find((r: any) => r.phase === p);
+      stats[p] = {
+        count: row ? parseInt(row.count) : 0,
+        pending_review: row ? parseInt(row.pending_review) : 0,
+        open_threads: row ? parseInt(row.open_threads) : 0
+      };
+    });
+
+    res.json(stats);
+  } catch (error) {
+    logger.error('Error fetching kanban stats', error);
+    res.status(500).json({ error: 'Failed to fetch kanban stats' });
   }
 });
 

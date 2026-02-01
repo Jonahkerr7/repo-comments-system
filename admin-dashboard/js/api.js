@@ -221,6 +221,19 @@ class API {
     return this.request(`/deployments/${id}/activity`);
   }
 
+  // Kanban/Double Diamond endpoints
+  async getKanbanStats(repo = null) {
+    const params = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+    return this.request(`/deployments/stats/kanban${params}`);
+  }
+
+  async updateDeploymentPhase(id, phase) {
+    return this.request(`/deployments/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ phase }),
+    });
+  }
+
   // GitHub integration
   async getGitHubRepos() {
     return this.request('/github/repos');

@@ -192,6 +192,9 @@ class AdminApp {
       case 'iterations':
         IterationsManager.loadIterations();
         break;
+      case 'kanban':
+        KanbanManager.loadKanban();
+        break;
       case 'comments':
         CommentsManager.loadComments();
         break;
