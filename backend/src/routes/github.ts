@@ -112,6 +112,78 @@ router.get('/repos/:owner/:repo/branches', authenticate, async (req, res) => {
   }
 });
 
+// Get user's connected repositories (repos with permissions)
+router.get('/connected', authenticate, async (req, res) => {
+  const authReq = req as unknown as AuthenticatedRequest;
+
+  try {
+    // Get repos the user has connected (has permissions for)
+    const permissionsResult = await query(
+      `SELECT DISTINCT repo, role, created_at FROM permissions
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [authReq.user!.id]
+    );
+
+    const connectedRepos = permissionsResult.rows;
+
+    // Get URL mappings for these repos (case-insensitive)
+    const repoNames = connectedRepos.map(r => r.repo);
+    const repoNamesLower = repoNames.map(r => r.toLowerCase());
+    let urlMappings: Record<string, any[]> = {};
+
+    if (repoNames.length > 0) {
+      const urlsResult = await query(
+        `SELECT repo, url_pattern, environment FROM repo_urls
+         WHERE LOWER(repo) = ANY($1) AND is_active = true`,
+        [repoNamesLower]
+      );
+
+      urlsResult.rows.forEach(row => {
+        // Map back to the original connected repo name (case-insensitive match)
+        const matchingRepo = repoNames.find(r => r.toLowerCase() === row.repo.toLowerCase());
+        const key = matchingRepo || row.repo;
+        if (!urlMappings[key]) urlMappings[key] = [];
+        urlMappings[key].push(row);
+      });
+    }
+
+    // Get thread counts for these repos (case-insensitive)
+    let threadCounts: Record<string, { open: number; resolved: number }> = {};
+
+    if (repoNames.length > 0) {
+      const threadsResult = await query(
+        `SELECT LOWER(repo) as repo_lower, status, COUNT(*) as count FROM threads
+         WHERE LOWER(repo) = ANY($1)
+         GROUP BY LOWER(repo), status`,
+        [repoNamesLower]
+      );
+
+      threadsResult.rows.forEach(row => {
+        // Map back to the original connected repo name
+        const matchingRepo = repoNames.find(r => r.toLowerCase() === row.repo_lower);
+        const key = matchingRepo || row.repo_lower;
+        if (!threadCounts[key]) threadCounts[key] = { open: 0, resolved: 0 };
+        threadCounts[key][row.status as 'open' | 'resolved'] = parseInt(row.count);
+      });
+    }
+
+    // Combine data
+    const result = connectedRepos.map(r => ({
+      repo: r.repo,
+      role: r.role,
+      connected_at: r.created_at,
+      urls: urlMappings[r.repo] || [],
+      threads: threadCounts[r.repo] || { open: 0, resolved: 0 }
+    }));
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Error fetching connected repos', error);
+    res.status(500).json({ error: 'Failed to fetch connected repositories' });
+  }
+});
+
 // Quick connect a repo (creates permission entry)
 router.post('/connect', authenticate, async (req, res) => {
   const authReq = req as unknown as AuthenticatedRequest;
@@ -139,6 +211,24 @@ router.post('/connect', authenticate, async (req, res) => {
        RETURNING *`,
       [authReq.user!.id, repo, default_role]
     );
+
+    // Auto-register GitHub Pages URL if applicable
+    const [owner, repoName] = repo.split('/');
+    if (owner && repoName) {
+      const githubPagesUrl = `https://${owner.toLowerCase()}.github.io/${repoName}/*`;
+      try {
+        await query(
+          `INSERT INTO repo_urls (repo, url_pattern, environment, description)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (url_pattern) DO NOTHING`,
+          [repo, githubPagesUrl, 'production', 'Auto-registered GitHub Pages']
+        );
+        logger.info('Auto-registered GitHub Pages URL', { repo, url: githubPagesUrl });
+      } catch (urlError) {
+        // Non-critical, just log and continue
+        logger.warn('Failed to auto-register GitHub Pages URL', urlError);
+      }
+    }
 
     logger.info('Repository connected', { repo, userId: authReq.user!.id });
     res.status(201).json(result.rows[0]);

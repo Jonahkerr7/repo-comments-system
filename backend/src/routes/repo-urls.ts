@@ -21,7 +21,7 @@ router.get('/', authenticate, async (req, res) => {
     const params: any[] = [];
 
     if (repo) {
-      queryText += ' AND ru.repo = $1';
+      queryText += ' AND LOWER(ru.repo) = LOWER($1)';
       params.push(repo);
     }
 
@@ -93,16 +93,24 @@ router.post(
       const result = await query(
         `INSERT INTO repo_urls (repo, url_pattern, environment, branch, description, created_by)
          VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING *`,
+         ON CONFLICT (url_pattern) DO UPDATE SET
+           updated_at = NOW()
+         RETURNING *, (xmax = 0) AS inserted`,
         [repo, url_pattern, environment || 'development', branch || null, description || null, authReq.user!.id]
       );
 
-      logger.info('Repo URL mapping created', { repo, url_pattern });
-      res.status(201).json(result.rows[0]);
-    } catch (error: any) {
-      if (error.code === '23505') {
-        return res.status(400).json({ error: 'URL pattern already exists' });
+      const row = result.rows[0];
+      const wasInserted = row.inserted;
+      delete row.inserted;
+
+      if (wasInserted) {
+        logger.info('Repo URL mapping created', { repo, url_pattern });
+        res.status(201).json(row);
+      } else {
+        logger.info('Repo URL mapping already exists', { repo, url_pattern });
+        res.status(200).json(row);
       }
+    } catch (error: any) {
       logger.error('Error creating repo URL mapping', error);
       res.status(500).json({ error: 'Failed to create repo URL mapping' });
     }

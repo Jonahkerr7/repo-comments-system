@@ -160,7 +160,7 @@ router.get(
       let paramIndex = 1;
 
       if (repo) {
-        queryText += ` AND repo = $${paramIndex}`;
+        queryText += ` AND LOWER(repo) = LOWER($${paramIndex})`;
         params.push(repo);
         paramIndex++;
       }
