@@ -1,5 +1,6 @@
 // Content script - injected into all pages
 // Manages RepoComments UI injection based on extension state
+console.log('[RepoComments CS] Content script loaded - v2.0 with screenshot bridge');
 
 let commentsEnabled = false;
 let commentsInstance = null;
@@ -8,6 +9,44 @@ let commentsInstance = null;
 chrome.storage.local.get(['enabled', 'token', 'apiUrl'], (result) => {
   if (result.enabled && result.token) {
     enableComments(result);
+  }
+});
+
+// Listen for messages from page scripts (comments-ui.js runs in page context)
+// This bridges communication between page scripts and the extension background
+window.addEventListener('message', async (event) => {
+  // Only accept messages from this window
+  if (event.source !== window) return;
+
+  if (event.data?.type === 'RC_CAPTURE_SCREENSHOT') {
+    const { requestId, elementRect, devicePixelRatio } = event.data;
+    console.log('[RepoComments CS] Received screenshot request:', requestId);
+
+    try {
+      // Forward to background script
+      chrome.runtime.sendMessage({
+        type: 'CAPTURE_ELEMENT_SCREENSHOT',
+        elementRect,
+        devicePixelRatio
+      }, (response) => {
+        console.log('[RepoComments CS] Got response from background:', response ? 'success' : 'null', response?.error);
+        // Send result back to page script
+        window.postMessage({
+          type: 'RC_SCREENSHOT_RESULT',
+          requestId,
+          screenshot: response?.screenshot || null,
+          error: response?.error || null
+        }, '*');
+      });
+    } catch (err) {
+      console.error('[RepoComments CS] Error forwarding to background:', err);
+      window.postMessage({
+        type: 'RC_SCREENSHOT_RESULT',
+        requestId,
+        screenshot: null,
+        error: err.message
+      }, '*');
+    }
   }
 });
 

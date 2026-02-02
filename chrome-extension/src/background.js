@@ -82,7 +82,89 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true;
   }
+
+  // Capture element screenshot
+  if (request.type === 'CAPTURE_ELEMENT_SCREENSHOT') {
+    const { elementRect, devicePixelRatio } = request;
+    console.log('[RepoComments BG] Screenshot request received:', elementRect);
+
+    // Use sender's tab windowId for more reliable capture
+    const windowId = sender.tab?.windowId || null;
+
+    chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataUrl) => {
+      if (chrome.runtime.lastError) {
+        console.error('[RepoComments BG] Screenshot capture failed:', chrome.runtime.lastError);
+        sendResponse({ error: chrome.runtime.lastError.message });
+        return;
+      }
+
+      if (!dataUrl) {
+        console.error('[RepoComments BG] No dataUrl returned');
+        sendResponse({ error: 'No screenshot data returned' });
+        return;
+      }
+
+      console.log('[RepoComments BG] Screenshot captured, cropping...');
+
+      // Crop the image to the element bounds
+      cropImage(dataUrl, elementRect, devicePixelRatio)
+        .then(croppedDataUrl => {
+          console.log('[RepoComments BG] Crop complete, size:', croppedDataUrl?.length);
+          sendResponse({ screenshot: croppedDataUrl });
+        })
+        .catch(err => {
+          console.error('[RepoComments BG] Crop failed:', err);
+          sendResponse({ error: err.message });
+        });
+    });
+
+    return true; // Keep channel open for async response
+  }
+
+  // Return false for unhandled messages to avoid keeping channel open
+  return false;
 });
+
+// Helper function to crop image to element bounds
+async function cropImage(dataUrl, rect, dpr = 1) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      // Create canvas for cropping
+      const canvas = new OffscreenCanvas(
+        Math.min(rect.width * dpr, 400), // Max width 400px
+        Math.min(rect.height * dpr, 300) // Max height 300px
+      );
+      const ctx = canvas.getContext('2d');
+
+      // Calculate scale to fit within max dimensions
+      const scale = Math.min(400 / (rect.width * dpr), 300 / (rect.height * dpr), 1);
+      canvas.width = rect.width * dpr * scale;
+      canvas.height = rect.height * dpr * scale;
+
+      // Draw cropped portion
+      ctx.drawImage(
+        img,
+        rect.x * dpr, rect.y * dpr,    // Source x, y
+        rect.width * dpr, rect.height * dpr, // Source width, height
+        0, 0,                              // Dest x, y
+        canvas.width, canvas.height        // Dest width, height
+      );
+
+      // Convert to data URL
+      canvas.convertToBlob({ type: 'image/png', quality: 0.8 })
+        .then(blob => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        })
+        .catch(reject);
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
 
 // Update badge when tabs change
 chrome.tabs.onActivated.addListener(() => {

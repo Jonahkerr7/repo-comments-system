@@ -11,11 +11,58 @@
 (function() {
     'use strict';
 
-    // Get configuration from script tag
+    // Environment detection for auto-configuration
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+    // Auto-detect API URL based on environment
+    function detectApiUrl() {
+        // Check for explicit configuration first
+        const explicitUrl = currentScript?.getAttribute('data-api') || window.REPO_COMMENTS_API_URL;
+        if (explicitUrl) return explicitUrl;
+
+        // Auto-detect based on environment
+        if (isLocalhost) {
+            return 'http://localhost:3000';
+        }
+
+        // Production default
+        return 'https://repo-comments-system-production.up.railway.app';
+    }
+
+    // Auto-detect repo from URL patterns
+    function detectRepo() {
+        const explicitRepo = currentScript?.getAttribute('data-repo') || window.REPO_COMMENTS_REPO;
+        if (explicitRepo) return explicitRepo;
+
+        // Try to detect from GitHub Pages URL
+        if (hostname.endsWith('.github.io')) {
+            const username = hostname.replace('.github.io', '');
+            const pathParts = window.location.pathname.split('/').filter(p => p);
+            const repoName = pathParts[0] || 'website';
+            return `${username}/${repoName}`;
+        }
+
+        // Vercel pattern: project-name-git-branch-team.vercel.app
+        const vercelMatch = hostname.match(/^([^-]+)-.*\.vercel\.app$/);
+        if (vercelMatch) {
+            return `vercel/${vercelMatch[1]}`;
+        }
+
+        // Netlify pattern: site-name.netlify.app
+        const netlifyMatch = hostname.match(/^([^.]+)\.netlify\.app$/);
+        if (netlifyMatch) {
+            return `netlify/${netlifyMatch[1]}`;
+        }
+
+        return null;
+    }
+
+    // Get configuration from script tag with auto-detection fallbacks
     const currentScript = document.currentScript;
     const config = {
-        apiUrl: currentScript?.getAttribute('data-api') || window.REPO_COMMENTS_API_URL || '',
-        repo: currentScript?.getAttribute('data-repo') || window.REPO_COMMENTS_REPO || '',
+        apiUrl: detectApiUrl(),
+        repo: detectRepo(),
         branch: currentScript?.getAttribute('data-branch') || window.REPO_COMMENTS_BRANCH || 'main',
     };
 
@@ -26,8 +73,8 @@
     }
 
     if (!config.repo) {
-        console.error('[RepoComments] Missing repository. Set data-repo attribute or window.REPO_COMMENTS_REPO');
-        return;
+        console.warn('[RepoComments] Could not auto-detect repository. Set data-repo attribute or window.REPO_COMMENTS_REPO');
+        // Don't return - try to look it up via URL pattern in the API
     }
 
     // Load Socket.IO if not already loaded
@@ -42,6 +89,82 @@
         script.onload = callback;
         script.onerror = () => console.warn('[RepoComments] Failed to load Socket.IO, real-time updates disabled');
         document.head.appendChild(script);
+    }
+
+    // Load html2canvas for screenshot capture (lazy loaded on first use)
+    let html2canvasLoaded = false;
+    let html2canvasLoading = false;
+    const html2canvasCallbacks = [];
+
+    function loadHtml2Canvas(callback) {
+        if (html2canvasLoaded && typeof html2canvas !== 'undefined') {
+            callback();
+            return;
+        }
+
+        html2canvasCallbacks.push(callback);
+
+        if (html2canvasLoading) return;
+        html2canvasLoading = true;
+
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+        script.onload = () => {
+            html2canvasLoaded = true;
+            html2canvasCallbacks.forEach(cb => cb());
+            html2canvasCallbacks.length = 0;
+        };
+        script.onerror = () => {
+            console.warn('[RepoComments] Failed to load html2canvas, screenshots disabled');
+            html2canvasCallbacks.forEach(cb => cb());
+            html2canvasCallbacks.length = 0;
+        };
+        document.head.appendChild(script);
+    }
+
+    // Capture element screenshot using html2canvas
+    async function captureElementScreenshot(element) {
+        if (typeof html2canvas === 'undefined') {
+            return null;
+        }
+
+        try {
+            const canvas = await html2canvas(element, {
+                backgroundColor: null,
+                scale: window.devicePixelRatio || 1,
+                logging: false,
+                useCORS: true,
+                allowTaint: true,
+                width: Math.min(element.offsetWidth, 400),
+                height: Math.min(element.offsetHeight, 300)
+            });
+
+            // Scale down if too large
+            const maxWidth = 400;
+            const maxHeight = 300;
+            if (canvas.width > maxWidth || canvas.height > maxHeight) {
+                const scale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
+                const scaledCanvas = document.createElement('canvas');
+                scaledCanvas.width = canvas.width * scale;
+                scaledCanvas.height = canvas.height * scale;
+                const ctx = scaledCanvas.getContext('2d');
+                ctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+                return scaledCanvas.toDataURL('image/png', 0.8);
+            }
+
+            return canvas.toDataURL('image/png', 0.8);
+        } catch (err) {
+            console.warn('[RepoComments] Screenshot capture failed:', err);
+            return null;
+        }
+    }
+
+    // Get meaningful text from element
+    function getElementText(element) {
+        if (!element) return null;
+        const text = element.innerText?.trim() || element.value || element.placeholder || element.alt || '';
+        if (text.length > 0) return text.substring(0, 100);
+        return element.getAttribute('aria-label') || element.getAttribute('title') || null;
     }
 
     // Main RepoComments class
@@ -914,16 +1037,46 @@
             if (!this.isAddingComment) return;
             if (e.target.closest('.rc-root') || e.target.closest('.rc-panel') || this.draggedMarker) return;
             this.cancelAddingComment();
+
             const x = e.clientX + window.scrollX, y = e.clientY + window.scrollY;
             const clickedElement = document.elementFromPoint(e.clientX, e.clientY);
             const selector = this.getElementSelector(clickedElement);
+
+            // Get element metadata
+            const elementTag = clickedElement?.tagName?.toLowerCase() || '';
+            const elementText = getElementText(clickedElement);
+
+            // Capture screenshot BEFORE showing prompt (so element is still visible)
+            let screenshot = null;
+            if (clickedElement && typeof html2canvas !== 'undefined') {
+                try {
+                    console.log('[RepoComments] Capturing screenshot...');
+                    screenshot = await captureElementScreenshot(clickedElement);
+                    console.log('[RepoComments] Screenshot captured:', screenshot ? `${screenshot.length} chars` : 'null');
+                } catch (err) {
+                    console.warn('[RepoComments] Screenshot capture failed:', err);
+                }
+            }
+
+            // Now show the prompt
             const message = prompt('Enter your comment:');
             if (!message) return;
+
             try {
                 await fetch(`${this.apiUrl}/api/v1/threads`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${this.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ repo: this.repo, branch: this.branch, context_type: 'ui', coordinates: { x, y }, selector, message })
+                    body: JSON.stringify({
+                        repo: this.repo,
+                        branch: this.branch,
+                        context_type: 'ui',
+                        coordinates: { x, y },
+                        selector,
+                        element_tag: elementTag,
+                        element_text: elementText,
+                        screenshot,
+                        message
+                    })
                 });
                 await this.loadThreads();
             } catch (error) { console.error('[RepoComments] Error:', error); }
@@ -932,9 +1085,15 @@
 
     // Initialize when DOM is ready
     function initialize() {
-        loadSocketIO(() => {
-            window.repoComments = new RepoComments(config);
+        // Load dependencies in parallel
+        loadSocketIO(() => {});
+        loadHtml2Canvas(() => {
+            console.log('[RepoComments] html2canvas loaded for screenshot capture');
         });
+
+        // Initialize widget
+        window.repoComments = new RepoComments(config);
+        console.log('[RepoComments] Initialized for', config.repo, '/', config.branch);
     }
 
     if (document.readyState === 'loading') {

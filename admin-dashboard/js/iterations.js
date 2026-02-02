@@ -213,6 +213,11 @@ class IterationsManager {
       console.error('Error loading activity:', error);
     }
 
+    // Load branch timeline
+    if (typeof BranchTimeline !== 'undefined') {
+      BranchTimeline.loadTimeline(deployment.repo, deployment.branch);
+    }
+
     // Setup modal buttons
     document.getElementById('btn-launch-deployment').onclick = () => {
       window.open(deployment.url, '_blank');

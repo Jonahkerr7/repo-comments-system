@@ -1,5 +1,6 @@
 // RepoComments - Vanilla JS Implementation
 // Figma-like commenting system
+console.log('[RepoComments] comments-ui.js loaded - v2.0 with screenshot support');
 
 class RepoComments {
     constructor(config) {
@@ -637,6 +638,27 @@ class RepoComments {
         const clickedElement = document.elementFromPoint(e.clientX, e.clientY);
         const selector = this.getElementSelector(clickedElement);
 
+        // Get element metadata for better descriptions
+        const elementTag = clickedElement?.tagName?.toLowerCase() || '';
+        const elementText = this.getElementText(clickedElement);
+
+        // Get element bounds for screenshot
+        const elementRect = clickedElement?.getBoundingClientRect();
+
+        // CAPTURE SCREENSHOT FIRST - before prompt blocks the UI
+        let screenshot = null;
+        console.log('[RepoComments] Element info:', { elementTag, elementText, elementRect });
+        if (elementRect) {
+            try {
+                console.log('[RepoComments] Capturing screenshot BEFORE prompt...');
+                screenshot = await this.captureScreenshot(elementRect);
+                console.log('[RepoComments] Screenshot captured:', screenshot ? `${screenshot.length} chars` : 'null');
+            } catch (err) {
+                console.warn('[RepoComments] Could not capture screenshot:', err);
+            }
+        }
+
+        // NOW show the prompt (after screenshot is captured)
         const message = prompt('Enter your comment:');
         if (!message) return;
 
@@ -652,7 +674,10 @@ class RepoComments {
                     branch: this.branch,
                     context_type: 'ui',
                     coordinates: { x, y },
-                    selector: selector,  // Add CSS selector
+                    selector: selector,
+                    element_tag: elementTag,
+                    element_text: elementText,
+                    screenshot: screenshot,
                     message
                 })
             });
@@ -666,6 +691,67 @@ class RepoComments {
             console.error('[RepoComments] Error creating comment:', error);
             alert('Failed to create comment. Check console for details.');
         }
+    }
+
+    // Get meaningful text from element
+    getElementText(element) {
+        if (!element) return null;
+
+        // Get direct text content (first 100 chars)
+        const text = element.innerText?.trim() || element.value || element.placeholder || element.alt || '';
+        if (text.length > 0) {
+            return text.substring(0, 100);
+        }
+
+        // Try aria-label or title
+        return element.getAttribute('aria-label') || element.getAttribute('title') || null;
+    }
+
+    // Capture screenshot via content script bridge
+    // Since this runs as a page script, we can't access chrome.runtime directly
+    // Instead, we use postMessage to communicate with the content script
+    captureScreenshot(elementRect) {
+        return new Promise((resolve, reject) => {
+            const requestId = `screenshot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+            // Set up listener for the response
+            const handleResponse = (event) => {
+                if (event.source !== window) return;
+                if (event.data?.type !== 'RC_SCREENSHOT_RESULT') return;
+                if (event.data.requestId !== requestId) return;
+
+                // Clean up listener
+                window.removeEventListener('message', handleResponse);
+                clearTimeout(timeoutId);
+
+                if (event.data.error) {
+                    reject(new Error(event.data.error));
+                } else {
+                    resolve(event.data.screenshot);
+                }
+            };
+
+            window.addEventListener('message', handleResponse);
+
+            // Timeout after 5 seconds
+            const timeoutId = setTimeout(() => {
+                window.removeEventListener('message', handleResponse);
+                reject(new Error('Screenshot capture timed out'));
+            }, 5000);
+
+            // Send request to content script
+            window.postMessage({
+                type: 'RC_CAPTURE_SCREENSHOT',
+                requestId,
+                elementRect: {
+                    x: elementRect.x,
+                    y: elementRect.y,
+                    width: elementRect.width,
+                    height: elementRect.height
+                },
+                devicePixelRatio: window.devicePixelRatio || 1
+            }, '*');
+        });
     }
 }
 

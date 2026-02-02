@@ -54,51 +54,33 @@ class ReposManager {
       // Build the repos list
       let html = '';
 
-      // Show GitHub repos section if we have GitHub access
-      if (this.githubRepos.length > 0) {
-        html += `
-          <div class="github-repos-section">
-            <h3 class="repos-section-title">Your GitHub Repositories</h3>
-            <p class="repos-section-desc">Click "Connect" to enable commenting on a repo</p>
-            <div class="github-repos-grid">
-              ${this.githubRepos.slice(0, 12).map(repo => this.renderGitHubRepoCard(repo)).join('')}
-            </div>
-            ${this.githubRepos.length > 12 ? `
-              <button class="btn-secondary btn-show-all-repos" style="margin-top: 1rem;">
-                Show all ${this.githubRepos.length} repositories
-              </button>
-            ` : ''}
-          </div>
-        `;
-      } else if (githubError) {
-        html += `
-          <div class="github-connect-prompt">
-            <p>Login with GitHub to see your repositories</p>
-            <button class="btn-primary" onclick="api.login()">Connect GitHub</button>
-          </div>
-        `;
-      }
-
-      // Show connected repos
+      // Show connected repos as primary content
       if (this.connectedRepos.size > 0) {
         html += `
           <div class="connected-repos-section">
-            <h3 class="repos-section-title">Connected Repositories</h3>
-            ${Array.from(this.connectedRepos)
-              .map(repo => this.renderRepoCard(repo, repoPermissions[repo]))
-              .join('')}
+            <div class="connected-repos-grid">
+              ${Array.from(this.connectedRepos)
+                .map(repo => this.renderConnectedRepoCard(repo, repoPermissions[repo]))
+                .join('')}
+            </div>
+          </div>
+        `;
+      } else {
+        html = `
+          <div class="repos-empty-state glass-card">
+            <div class="empty-icon">📦</div>
+            <h3>No repositories connected</h3>
+            <p>Connect your GitHub repositories to enable commenting</p>
+            ${this.githubRepos.length > 0
+              ? '<button class="btn-primary" onclick="ReposManager.openConnectModal()">Connect Repository</button>'
+              : '<button class="btn-primary" onclick="api.login()">Login with GitHub</button>'
+            }
           </div>
         `;
       }
 
-      if (html === '') {
-        html = `
-          <div style="text-align: center; padding: 3rem; color: #a0aec0; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
-            <p>No repositories connected yet.</p>
-            <p style="margin-top: 0.5rem; font-size: 0.875rem;">Connect your GitHub account to see your repos.</p>
-          </div>
-        `;
-      }
+      // Store modal content for later
+      this.updateConnectModal();
 
       reposList.innerHTML = html;
 
@@ -109,6 +91,9 @@ class ReposManager {
       // Populate filter dropdown
       this.repos = this.connectedRepos;
       this.populateRepoFilter();
+
+      // Load branches after repos are loaded (ensures connectedRepos is populated)
+      await this.loadActiveBranches();
     } catch (error) {
       console.error('Error loading repositories:', error);
       reposList.innerHTML = `
@@ -119,44 +104,121 @@ class ReposManager {
     }
   }
 
-  static renderGitHubRepoCard(repo) {
-    const isConnected = this.connectedRepos.has(repo.full_name);
-    // Use deployment URL if available
-    const deployment = this.deploymentUrls.get(repo.full_name);
+  // Compact card for connected repos on main page
+  static renderConnectedRepoCard(repo, permissions = []) {
+    const deployment = this.deploymentUrls.get(repo);
     const previewUrl = deployment?.url;
+    const repoName = repo.split('/')[1] || repo;
+    const owner = repo.split('/')[0] || '';
+    const permCount = permissions?.length || 0;
+    const env = deployment?.environment || 'preview';
 
     return `
-      <div class="github-repo-card ${isConnected ? 'connected' : ''}" data-repo="${repo.full_name}">
-        <div class="github-repo-info">
-          <span class="github-repo-name">${repo.name}</span>
-          <span class="github-repo-owner">${repo.owner}</span>
-          ${repo.private ? '<span class="github-repo-private">Private</span>' : ''}
+      <div class="connected-repo-card glass-card-solid" data-repo="${repo}">
+        <div class="connected-repo-header">
+          <div class="connected-repo-icon">📦</div>
+          <div class="connected-repo-info">
+            <span class="connected-repo-name">${repoName}</span>
+            <span class="connected-repo-owner">${owner}</span>
+          </div>
         </div>
-        <div class="github-repo-actions">
-          ${isConnected
-            ? `${previewUrl ? `<a href="${previewUrl}" target="_blank" class="btn-success btn-small">Launch</a>` : ''}
-               <span class="connected-badge">Connected</span>`
-            : '<button class="btn-primary btn-small btn-connect-repo">Connect</button>'
+        <div class="connected-repo-meta">
+          ${deployment ? `<span class="repo-env env-${env}">${env}</span>` : '<span class="repo-env" style="background:#f3f4f6;color:#6b7280;">no deploy</span>'}
+          <span class="repo-stat">👥 ${permCount}</span>
+        </div>
+        <div class="connected-repo-actions">
+          ${previewUrl
+            ? `<a href="${previewUrl}" target="_blank" class="btn-small btn-launch">Launch</a>`
+            : '<span class="btn-small btn-secondary" style="opacity:0.5;cursor:default;">No URL</span>'
           }
+          <button class="btn-small btn-secondary btn-view-comments" title="View Comments">💬</button>
+          <button class="btn-small btn-secondary btn-manage-permissions" title="Settings">⚙️</button>
         </div>
       </div>
     `;
   }
 
-  static attachGitHubListeners() {
-    // Connect repo buttons
-    document.querySelectorAll('.btn-connect-repo').forEach(btn => {
+  // Modal for connecting new repos
+  static updateConnectModal() {
+    const modalContent = document.getElementById('connect-repos-grid');
+    if (!modalContent) return;
+
+    if (this.githubRepos.length === 0) {
+      modalContent.innerHTML = `
+        <div class="connect-empty">
+          <p>No GitHub repositories found</p>
+          <button class="btn-primary" onclick="api.login()">Reconnect GitHub</button>
+        </div>
+      `;
+      return;
+    }
+
+    // Separate connected and unconnected repos
+    const unconnected = this.githubRepos.filter(r => !this.connectedRepos.has(r.full_name));
+    const connected = this.githubRepos.filter(r => this.connectedRepos.has(r.full_name));
+
+    modalContent.innerHTML = `
+      ${unconnected.length > 0 ? `
+        <div class="connect-section">
+          <h4 class="connect-section-title">Available to Connect</h4>
+          <div class="connect-repos-grid">
+            ${unconnected.map(repo => this.renderConnectRepoItem(repo, false)).join('')}
+          </div>
+        </div>
+      ` : ''}
+      ${connected.length > 0 ? `
+        <div class="connect-section">
+          <h4 class="connect-section-title">Already Connected</h4>
+          <div class="connect-repos-grid">
+            ${connected.map(repo => this.renderConnectRepoItem(repo, true)).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    this.attachConnectModalListeners();
+  }
+
+  // Compact repo item for connect modal
+  static renderConnectRepoItem(repo, isConnected) {
+    return `
+      <div class="connect-repo-item ${isConnected ? 'connected' : ''}" data-repo="${repo.full_name}">
+        <div class="connect-repo-info">
+          <span class="connect-repo-name">${repo.name}</span>
+          ${repo.private ? '<span class="connect-repo-private">🔒</span>' : ''}
+        </div>
+        ${isConnected
+          ? '<span class="connect-repo-status">✓ Connected</span>'
+          : '<button class="btn-connect-repo">Connect</button>'
+        }
+      </div>
+    `;
+  }
+
+  static openConnectModal() {
+    this.updateConnectModal();
+    document.getElementById('modal-connect-repos').classList.add('active');
+  }
+
+  static attachConnectModalListeners() {
+    // Connect repo buttons in modal
+    document.querySelectorAll('#modal-connect-repos .btn-connect-repo').forEach(btn => {
       btn.addEventListener('click', async (e) => {
-        const card = e.target.closest('.github-repo-card');
-        const repo = card.dataset.repo;
+        const item = e.target.closest('.connect-repo-item');
+        const repo = item.dataset.repo;
 
         btn.disabled = true;
-        btn.textContent = 'Connecting...';
+        btn.textContent = '...';
 
         try {
           await api.connectRepo(repo);
           app.showNotification(`Connected ${repo}`);
-          this.loadRepos(); // Refresh
+          item.classList.add('connected');
+          btn.replaceWith(Object.assign(document.createElement('span'), {
+            className: 'connect-repo-status',
+            textContent: '✓ Connected'
+          }));
+          this.loadRepos(); // Refresh main page
         } catch (error) {
           app.showNotification('Failed to connect: ' + error.message, 'error');
           btn.disabled = false;
@@ -164,17 +226,10 @@ class ReposManager {
         }
       });
     });
+  }
 
-    // Show all repos button
-    const showAllBtn = document.querySelector('.btn-show-all-repos');
-    if (showAllBtn) {
-      showAllBtn.addEventListener('click', () => {
-        const grid = document.querySelector('.github-repos-grid');
-        grid.innerHTML = this.githubRepos.map(repo => this.renderGitHubRepoCard(repo)).join('');
-        showAllBtn.remove();
-        this.attachGitHubListeners();
-      });
-    }
+  static attachGitHubListeners() {
+    // Legacy - kept for backwards compatibility
   }
 
   static renderRepoCard(repo, permissions = []) {
@@ -206,18 +261,18 @@ class ReposManager {
     // Manage permissions
     document.querySelectorAll('.btn-manage-permissions').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const repoCard = e.target.closest('.repo-card');
-        const repo = repoCard.dataset.repo;
-        this.managePermissions(repo);
+        const repoCard = e.target.closest('.connected-repo-card');
+        const repo = repoCard?.dataset.repo;
+        if (repo) this.managePermissions(repo);
       });
     });
 
     // View comments
     document.querySelectorAll('.btn-view-comments').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const repoCard = e.target.closest('.repo-card');
-        const repo = repoCard.dataset.repo;
-        this.viewComments(repo);
+        const repoCard = e.target.closest('.connected-repo-card');
+        const repo = repoCard?.dataset.repo;
+        if (repo) this.viewComments(repo);
       });
     });
   }

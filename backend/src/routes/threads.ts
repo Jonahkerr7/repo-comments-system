@@ -36,6 +36,14 @@ router.post(
     const authReq = req as unknown as AuthenticatedRequest;
     const data: CreateThreadRequest = req.body;
 
+    // Debug: log screenshot and element data
+    logger.info('Thread creation request', {
+      hasScreenshot: !!data.screenshot,
+      screenshotLength: data.screenshot?.length || 0,
+      element_tag: data.element_tag,
+      element_text: data.element_text,
+    });
+
     try {
       // Validate context-specific fields
       if (data.context_type === 'code' && !data.file_path) {
@@ -56,14 +64,18 @@ router.post(
       );
       const deploymentId = deploymentResult.rows[0]?.id || null;
 
+      // Handle screenshot - accept base64 data URL or URL
+      const screenshotUrl = data.screenshot || data.screenshot_url || null;
+
       // Create thread with deployment link
       const threadResult = await query<Thread>(
         `INSERT INTO threads (
           repo, branch, commit_hash, context_type,
           file_path, line_start, line_end, code_snippet,
           selector, xpath, coordinates, screenshot_url,
+          element_tag, element_text,
           priority, tags, created_by, deployment_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING *`,
         [
           data.repo,
@@ -77,7 +89,9 @@ router.post(
           data.selector || null,
           data.xpath || null,
           data.coordinates ? JSON.stringify(data.coordinates) : null,
-          data.screenshot_url || null,
+          screenshotUrl,
+          data.element_tag || null,
+          data.element_text || null,
           data.priority || 'normal',
           data.tags || [],
           authReq.user!.id,

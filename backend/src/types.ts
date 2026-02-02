@@ -102,6 +102,9 @@ export interface CreateThreadRequest {
   xpath?: string;
   coordinates?: Coordinates;
   screenshot_url?: string;
+  screenshot?: string; // Base64 data URL
+  element_tag?: string;
+  element_text?: string;
 
   // Initial message
   message: string;

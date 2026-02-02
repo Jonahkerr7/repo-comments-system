@@ -1,4 +1,5 @@
 // Double Diamond Kanban Board Management
+// Enhanced with WIP limits, progress visualization, and animations
 
 class KanbanManager {
   static deployments = [];
@@ -22,6 +23,20 @@ class KanbanManager {
     develop: '#06b6d4',
     deliver: '#10b981'
   };
+  static phaseIcons = {
+    discover: '🔍',
+    define: '📐',
+    develop: '⚡',
+    deliver: '🎯'
+  };
+  // WIP limits per phase (0 = unlimited)
+  static wipLimits = {
+    discover: 0,
+    define: 5,
+    develop: 8,
+    deliver: 3
+  };
+  static draggedElement = null;
 
   static async loadKanban() {
     const kanbanBoard = document.getElementById('kanban-board');
@@ -58,46 +73,103 @@ class KanbanManager {
   static renderKanbanBoard() {
     const kanbanBoard = document.getElementById('kanban-board');
 
-    kanbanBoard.innerHTML = this.phases.map(phase => {
-      const phaseDeployments = this.deployments.filter(d => (d.phase || 'discover') === phase);
-      const stat = this.stats[phase] || { count: 0, pending_review: 0, open_threads: 0 };
+    // Calculate phase progress
+    const totalItems = this.deployments.length || 1;
+    const phaseCounts = {};
+    this.phases.forEach(phase => {
+      phaseCounts[phase] = this.deployments.filter(d => (d.phase || 'discover') === phase).length;
+    });
 
-      return `
-        <div class="kanban-column" data-phase="${phase}">
-          <div class="kanban-column-header">
-            <div class="kanban-column-title">
-              <h3>${this.phaseLabels[phase]}</h3>
-              <span class="kanban-count">${stat.count}</span>
-            </div>
-            <p class="kanban-column-desc">${this.phaseDescriptions[phase]}</p>
-          </div>
-          <div class="kanban-column-content"
-               data-phase="${phase}"
-               ondragover="KanbanManager.handleDragOver(event)"
-               ondragleave="KanbanManager.handleDragLeave(event)"
-               ondrop="KanbanManager.handleDrop(event, '${phase}')">
-            ${phaseDeployments.length > 0
-              ? phaseDeployments.map(d => this.renderKanbanCard(d)).join('')
-              : '<div class="kanban-empty">No items</div>'
-            }
-          </div>
+    // Render progress header + columns
+    kanbanBoard.innerHTML = `
+      <!-- Phase Progress Visualization -->
+      <div class="kanban-progress-header">
+        <div class="kanban-progress-track">
+          ${this.phases.map((phase, idx) => {
+            const count = phaseCounts[phase];
+            const percentage = (count / totalItems) * 100;
+            return `
+              <div class="progress-phase phase-${phase}" style="--phase-color: ${this.phaseColors[phase]}">
+                <div class="progress-phase-icon">${this.phaseIcons[phase]}</div>
+                <div class="progress-phase-info">
+                  <span class="progress-phase-name">${this.phaseLabels[phase]}</span>
+                  <span class="progress-phase-count">${count}</span>
+                </div>
+                <div class="progress-phase-bar">
+                  <div class="progress-phase-fill" style="width: ${percentage}%"></div>
+                </div>
+              </div>
+              ${idx < this.phases.length - 1 ? '<div class="progress-connector"></div>' : ''}
+            `;
+          }).join('')}
         </div>
-      `;
-    }).join('');
+        <div class="kanban-total-stats">
+          <span class="total-stat"><strong>${totalItems}</strong> Total Items</span>
+          <span class="total-stat"><strong>${phaseCounts.deliver}</strong> Delivered</span>
+        </div>
+      </div>
+
+      <!-- Kanban Columns -->
+      <div class="kanban-columns-wrapper">
+        ${this.phases.map(phase => {
+          const phaseDeployments = this.deployments.filter(d => (d.phase || 'discover') === phase);
+          const stat = this.stats[phase] || { count: 0, pending_review: 0, open_threads: 0 };
+          const wipLimit = this.wipLimits[phase];
+          const isOverWip = wipLimit > 0 && phaseDeployments.length > wipLimit;
+          const isAtWip = wipLimit > 0 && phaseDeployments.length === wipLimit;
+
+          return `
+            <div class="kanban-column ${isOverWip ? 'wip-exceeded' : ''} ${isAtWip ? 'wip-at-limit' : ''}"
+                 data-phase="${phase}">
+              <div class="kanban-column-header" style="--phase-color: ${this.phaseColors[phase]}">
+                <div class="kanban-column-title">
+                  <span class="kanban-phase-icon">${this.phaseIcons[phase]}</span>
+                  <h3>${this.phaseLabels[phase]}</h3>
+                  <span class="kanban-count">${stat.count}</span>
+                  ${wipLimit > 0 ? `<span class="kanban-wip-limit ${isOverWip ? 'exceeded' : ''}">${wipLimit} max</span>` : ''}
+                </div>
+                <p class="kanban-column-desc">${this.phaseDescriptions[phase]}</p>
+                ${stat.open_threads > 0 ? `
+                  <div class="kanban-column-alerts">
+                    <span class="alert-badge">🔓 ${stat.open_threads} open threads</span>
+                  </div>
+                ` : ''}
+              </div>
+              <div class="kanban-column-content"
+                   data-phase="${phase}"
+                   ondragover="KanbanManager.handleDragOver(event)"
+                   ondragleave="KanbanManager.handleDragLeave(event)"
+                   ondrop="KanbanManager.handleDrop(event, '${phase}')">
+                ${phaseDeployments.length > 0
+                  ? phaseDeployments.map((d, idx) => this.renderKanbanCard(d, idx)).join('')
+                  : '<div class="kanban-empty">Drop items here</div>'
+                }
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
   }
 
-  static renderKanbanCard(deployment) {
+  static renderKanbanCard(deployment, index = 0) {
     const statusClass = IterationsManager.getStatusClass(deployment.status);
     const reviewClass = IterationsManager.getReviewStatusClass(deployment.review_status);
     const timeAgo = IterationsManager.formatTimeAgo(deployment.deployed_at || deployment.created_at);
     const repoName = deployment.repo.split('/')[1] || deployment.repo;
+    const phase = deployment.phase || 'discover';
+    const hasOpenThreads = (deployment.open_threads || 0) > 0;
+    const hasCriticalComments = deployment.has_critical_comments;
 
     return `
-      <div class="kanban-card"
+      <div class="kanban-card glass-card-solid animate-slide-up ${hasOpenThreads ? 'has-open-threads' : ''} ${hasCriticalComments ? 'has-critical' : ''}"
            data-deployment-id="${deployment.id}"
+           data-phase="${phase}"
+           style="animation-delay: ${index * 50}ms"
            draggable="true"
            ondragstart="KanbanManager.handleDragStart(event, '${deployment.id}')"
            ondragend="KanbanManager.handleDragEnd(event)">
+        <div class="kanban-card-phase-indicator" style="background: ${this.phaseColors[phase]}"></div>
         <div class="kanban-card-header">
           <span class="kanban-card-repo">${repoName}</span>
           ${deployment.pr_number ? `<span class="kanban-card-pr">#${deployment.pr_number}</span>` : ''}
@@ -112,8 +184,15 @@ class KanbanManager {
           <span class="kanban-card-time">${timeAgo}</span>
         </div>
         <div class="kanban-card-stats">
-          <span title="Comments">💬 ${deployment.comment_count || 0}</span>
-          <span title="Open threads">🔓 ${deployment.open_threads || 0}</span>
+          <span class="stat-comments ${(deployment.comment_count || 0) > 0 ? 'has-comments' : ''}" title="Comments">
+            💬 ${deployment.comment_count || 0}
+          </span>
+          <span class="stat-threads ${hasOpenThreads ? 'has-open' : ''}" title="Open threads">
+            🔓 ${deployment.open_threads || 0}
+          </span>
+          ${(deployment.resolved_threads || 0) > 0 ? `
+            <span class="stat-resolved" title="Resolved">✅ ${deployment.resolved_threads}</span>
+          ` : ''}
         </div>
         <div class="kanban-card-actions">
           ${deployment.url ? `<a href="${deployment.url}" target="_blank" class="btn-small btn-launch">Launch</a>` : ''}
@@ -159,13 +238,57 @@ class KanbanManager {
     const currentPhase = deployment.phase || 'discover';
     if (currentPhase === newPhase) return;
 
+    // Check WIP limit before allowing drop
+    const wipLimit = this.wipLimits[newPhase];
+    const currentCount = this.deployments.filter(d => (d.phase || 'discover') === newPhase).length;
+    if (wipLimit > 0 && currentCount >= wipLimit) {
+      app.showNotification(`WIP limit reached for ${this.phaseLabels[newPhase]} (max ${wipLimit})`, 'error');
+      return;
+    }
+
     try {
       await api.updateDeploymentPhase(deploymentId, newPhase);
-      app.showNotification(`Moved to ${this.phaseLabels[newPhase]}`);
+
+      // Celebrate if moving to Deliver phase
+      if (newPhase === 'deliver') {
+        this.celebrateDelivery();
+        app.showNotification(`🎉 ${deployment.branch} moved to Deliver!`);
+      } else {
+        app.showNotification(`Moved to ${this.phaseLabels[newPhase]}`);
+      }
+
       await this.loadKanban();
     } catch (error) {
       console.error('Error updating phase:', error);
       app.showNotification('Failed to move item: ' + error.message, 'error');
+    }
+  }
+
+  // Confetti celebration for Deliver phase
+  static celebrateDelivery() {
+    const colors = ['#10b981', '#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899'];
+    const confettiCount = 50;
+
+    for (let i = 0; i < confettiCount; i++) {
+      const confetti = document.createElement('div');
+      confetti.className = 'confetti';
+      confetti.style.cssText = `
+        position: fixed;
+        width: 10px;
+        height: 10px;
+        background: ${colors[Math.floor(Math.random() * colors.length)]};
+        left: ${Math.random() * 100}vw;
+        top: -10px;
+        border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+        animation: confetti-fall ${2 + Math.random() * 2}s linear forwards;
+        animation-delay: ${Math.random() * 0.5}s;
+        z-index: 10000;
+        pointer-events: none;
+      `;
+      document.body.appendChild(confetti);
+
+      // Remove after animation
+      setTimeout(() => confetti.remove(), 4000);
     }
   }
 

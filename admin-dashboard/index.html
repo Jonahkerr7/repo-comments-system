@@ -13,6 +13,10 @@
       <h1>RepoComments Admin</h1>
     </div>
     <div class="nav-user">
+      <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode">
+        <span class="icon-moon">🌙</span>
+        <span class="icon-sun">☀️</span>
+      </button>
       <div class="user-info" id="user-info"></div>
       <button class="btn-logout" id="logout-btn">Logout</button>
     </div>
@@ -81,6 +85,9 @@
             <p class="stat-number" id="stat-repos">-</p>
           </div>
         </div>
+
+        <!-- Request Tracker Widget -->
+        <div id="request-tracker" class="request-tracker"></div>
 
         <div class="recent-activity">
           <h3>Recent Activity</h3>
@@ -306,39 +313,32 @@
     </div>
   </div>
 
-  <!-- Add Repository Modal -->
-  <div id="modal-add-repo" class="modal">
-    <div class="modal-content">
+  <!-- Connect Repos Modal (Grid View) -->
+  <div id="modal-connect-repos" class="modal">
+    <div class="modal-content large">
       <div class="modal-header">
-        <h3>Connect Repository</h3>
+        <h3>Connect a Repository</h3>
         <button class="modal-close">&times;</button>
       </div>
-      <div class="connect-repo-info">
-        <p>After connecting, add the GitHub Action to auto-register deployments:</p>
-        <ol>
-          <li>Copy <code>.github/workflows/register-preview-url.yml</code> to your repo</li>
-          <li>Add secrets: <code>REPOCOMMENTS_API_URL</code> and <code>REPOCOMMENTS_API_TOKEN</code></li>
-          <li>Every deployment will auto-register branches, URLs, and PR info</li>
-        </ol>
+      <div class="connect-repos-modal-body">
+        <p class="connect-repos-hint">Select repositories to enable commenting. Connected repos will appear on your dashboard.</p>
+        <div id="connect-repos-grid" class="connect-repos-content">
+          <!-- Populated by JS -->
+        </div>
+        <div class="connect-repos-footer">
+          <details class="setup-instructions">
+            <summary>Setup Instructions</summary>
+            <div class="setup-content">
+              <p>After connecting, add the GitHub Action to auto-register deployments:</p>
+              <ol>
+                <li>Copy <code>.github/workflows/register-preview-url.yml</code> to your repo</li>
+                <li>Add secrets: <code>REPOCOMMENTS_API_URL</code> and <code>REPOCOMMENTS_API_TOKEN</code></li>
+                <li>Every deployment will auto-register branches, URLs, and PR info</li>
+              </ol>
+            </div>
+          </details>
+        </div>
       </div>
-      <form id="form-add-repo">
-        <div class="form-group">
-          <label>Repository Name</label>
-          <input type="text" name="repo" required placeholder="owner/repo-name">
-        </div>
-        <div class="form-group">
-          <label>Default Access Level for Team</label>
-          <select name="default_role">
-            <option value="read">Read - View comments only</option>
-            <option value="write" selected>Write - Add and resolve comments</option>
-            <option value="admin">Admin - Manage permissions</option>
-          </select>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary modal-close">Cancel</button>
-          <button type="submit" class="btn-primary">Connect Repository</button>
-        </div>
-      </form>
     </div>
   </div>
 
@@ -395,6 +395,11 @@
           </div>
         </div>
 
+        <!-- Branch Timeline Section -->
+        <div class="deployment-timeline-section glass-card" style="margin-top: 1rem;">
+          <div id="branch-timeline"></div>
+        </div>
+
         <div class="deployment-activity-section">
           <h4>Activity</h4>
           <div id="deployment-activity-list" class="activity-list"></div>
@@ -416,6 +421,9 @@
     </div>
   </div>
 
+  <!-- Enterprise Configuration (must load first) -->
+  <script src="js/config.js"></script>
+
   <script src="js/api.js"></script>
   <script src="js/teams.js"></script>
   <script src="js/users.js"></script>
@@ -423,6 +431,8 @@
   <script src="js/iterations.js"></script>
   <script src="js/kanban.js"></script>
   <script src="js/comments.js"></script>
+  <script src="js/requestTracker.js"></script>
+  <script src="js/branchTimeline.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -2,9 +2,15 @@
 
 class API {
   constructor() {
-    // Use production API
-    this.baseURL = 'https://repo-comments-system-production.up.railway.app/api/v1';
+    // Use centralized configuration (falls back to production if config not loaded)
+    this.baseURL = window.RepoCommentsConfig?.apiUrl ||
+                   'https://repo-comments-system-production.up.railway.app/api/v1';
     this.token = localStorage.getItem('admin_token');
+
+    // Log which API endpoint is being used
+    if (window.RepoCommentsConfig?.features?.debugMode) {
+      console.log('[API] Using endpoint:', this.baseURL);
+    }
   }
 
   // Set authentication token
