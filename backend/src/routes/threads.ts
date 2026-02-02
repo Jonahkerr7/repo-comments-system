@@ -141,7 +141,7 @@ router.get(
   '/',
   authenticate,
   [
-    validateQuery('repo').notEmpty().withMessage('Repository is required'),
+    validateQuery('repo').optional(),
     validateQuery('branch').optional(),
     validateQuery('status').optional().isIn(['open', 'resolved']),
     validateQuery('context_type').optional().isIn(['code', 'ui']),
@@ -155,9 +155,15 @@ router.get(
     const { repo, branch, status, context_type } = req.query;
 
     try {
-      let queryText = 'SELECT * FROM thread_summary WHERE repo = $1';
-      const params: any[] = [repo];
-      let paramIndex = 2;
+      let queryText = 'SELECT * FROM thread_summary WHERE 1=1';
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      if (repo) {
+        queryText += ` AND repo = $${paramIndex}`;
+        params.push(repo);
+        paramIndex++;
+      }
 
       if (branch) {
         queryText += ` AND branch = $${paramIndex}`;
