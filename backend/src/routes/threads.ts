@@ -155,35 +155,39 @@ router.get(
     const { repo, branch, status, context_type } = req.query;
 
     try {
-      let queryText = 'SELECT * FROM thread_summary WHERE 1=1';
+      let queryText = `
+        SELECT ts.*,
+          (SELECT content FROM messages m WHERE m.thread_id = ts.id ORDER BY m.created_at ASC LIMIT 1) as first_message
+        FROM thread_summary ts
+        WHERE 1=1`;
       const params: any[] = [];
       let paramIndex = 1;
 
       if (repo) {
-        queryText += ` AND LOWER(repo) = LOWER($${paramIndex})`;
+        queryText += ` AND LOWER(ts.repo) = LOWER($${paramIndex})`;
         params.push(repo);
         paramIndex++;
       }
 
       if (branch) {
-        queryText += ` AND branch = $${paramIndex}`;
+        queryText += ` AND ts.branch = $${paramIndex}`;
         params.push(branch);
         paramIndex++;
       }
 
       if (status) {
-        queryText += ` AND status = $${paramIndex}`;
+        queryText += ` AND ts.status = $${paramIndex}`;
         params.push(status);
         paramIndex++;
       }
 
       if (context_type) {
-        queryText += ` AND context_type = $${paramIndex}`;
+        queryText += ` AND ts.context_type = $${paramIndex}`;
         params.push(context_type);
         paramIndex++;
       }
 
-      queryText += ' ORDER BY created_at DESC';
+      queryText += ' ORDER BY ts.created_at DESC';
 
       const result = await query<ThreadSummary>(queryText, params);
 
