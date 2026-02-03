@@ -73,9 +73,9 @@ router.post(
           repo, branch, commit_hash, context_type,
           file_path, line_start, line_end, code_snippet,
           selector, xpath, coordinates, screenshot_url,
-          element_tag, element_text,
+          element_tag, element_text, view_context,
           priority, tags, created_by, deployment_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING *`,
         [
           data.repo,
@@ -92,6 +92,7 @@ router.post(
           screenshotUrl,
           data.element_tag || null,
           data.element_text || null,
+          data.view_context ? JSON.stringify(data.view_context) : null,
           data.priority || 'normal',
           data.tags || [],
           authReq.user!.id,
@@ -269,6 +270,7 @@ router.patch(
     body('tags').optional().isArray(),
     body('coordinates').optional().isObject(),
     body('selector').optional().isString(),
+    body('view_context').optional().isObject(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -324,6 +326,12 @@ router.patch(
         paramIndex++;
       }
 
+      if (updates.view_context !== undefined) {
+        setClauses.push(`view_context = $${paramIndex}`);
+        params.push(JSON.stringify(updates.view_context));
+        paramIndex++;
+      }
+
       if (setClauses.length === 0) {
         return res.status(400).json({ error: 'No valid updates provided' });
       }
@@ -365,8 +373,8 @@ router.patch(
   }
 );
 
-// Delete thread
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+// Delete thread (allow write users to delete threads)
+router.delete('/:id', authenticate, authorize('write'), async (req, res) => {
   const { id } = req.params;
   const authReq = req as unknown as AuthenticatedRequest;
 
