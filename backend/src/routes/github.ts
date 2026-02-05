@@ -241,4 +241,35 @@ router.post('/connect', authenticate, async (req, res) => {
   }
 });
 
+// Disconnect a repository (remove user's permission)
+router.delete('/disconnect/:owner/:repo', authenticate, async (req, res) => {
+  const authReq = req as unknown as AuthenticatedRequest;
+  const { owner, repo: repoName } = req.params;
+  const fullRepo = `${owner}/${repoName}`;
+
+  try {
+    // Delete user's permission for this repo
+    const result = await query(
+      'DELETE FROM permissions WHERE user_id = $1 AND LOWER(repo) = LOWER($2) RETURNING id',
+      [authReq.user!.id, fullRepo]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Repository not connected' });
+    }
+
+    // Also delete associated repo URLs created by this user
+    await query(
+      'DELETE FROM repo_urls WHERE LOWER(repo) = LOWER($1) AND created_by = $2',
+      [fullRepo, authReq.user!.id]
+    );
+
+    logger.info('Repository disconnected', { repo: fullRepo, userId: authReq.user!.id });
+    res.status(204).send();
+  } catch (error) {
+    logger.error('Error disconnecting repository', error);
+    res.status(500).json({ error: 'Failed to disconnect repository' });
+  }
+});
+
 export default router;
