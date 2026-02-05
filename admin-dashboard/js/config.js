@@ -19,21 +19,21 @@
   const API_ENDPOINTS = {
     development: 'http://localhost:3000/api/v1',
     staging: 'https://repo-comments-staging.up.railway.app/api/v1',
-    production: 'https://repo-comments-system-production.up.railway.app/api/v1'
+    production: 'https://renewed-appreciation-production-55e2.up.railway.app/api/v1'
   };
 
   // WebSocket endpoints by environment
   const WS_ENDPOINTS = {
     development: 'ws://localhost:3000',
     staging: 'wss://repo-comments-staging.up.railway.app',
-    production: 'wss://repo-comments-system-production.up.railway.app'
+    production: 'wss://renewed-appreciation-production-55e2.up.railway.app'
   };
 
   // OAuth callback URLs by environment
   const OAUTH_CALLBACKS = {
     development: 'http://localhost:3000/api/v1/auth/github/callback',
     staging: 'https://repo-comments-staging.up.railway.app/api/v1/auth/github/callback',
-    production: 'https://repo-comments-system-production.up.railway.app/api/v1/auth/github/callback'
+    production: 'https://renewed-appreciation-production-55e2.up.railway.app/api/v1/auth/github/callback'
   };
 
   // Feature flags
@@ -51,16 +51,20 @@
     analytics: ENV === 'production'
   };
 
+  // Check for localStorage override (useful for local dev pointing to production)
+  const apiOverride = localStorage.getItem('repo-comments-api-override');
+  const wsOverride = localStorage.getItem('repo-comments-ws-override');
+
   // Export configuration
   window.RepoCommentsConfig = {
     // Current environment
     env: ENV,
 
-    // API base URL (can be overridden)
-    apiUrl: window.REPO_COMMENTS_API_URL || API_ENDPOINTS[ENV],
+    // API base URL (priority: localStorage > window global > environment default)
+    apiUrl: apiOverride || window.REPO_COMMENTS_API_URL || API_ENDPOINTS[ENV],
 
     // WebSocket URL
-    wsUrl: window.REPO_COMMENTS_WS_URL || WS_ENDPOINTS[ENV],
+    wsUrl: wsOverride || window.REPO_COMMENTS_WS_URL || WS_ENDPOINTS[ENV],
 
     // OAuth callback
     oauthCallback: OAUTH_CALLBACKS[ENV],

@@ -7,8 +7,15 @@ let commentsInstance = null;
 
 // Check if comments should be enabled on page load
 chrome.storage.local.get(['enabled', 'token', 'apiUrl'], (result) => {
+  console.log('[RepoComments CS] Storage state:', {
+    enabled: result.enabled,
+    hasToken: !!result.token,
+    apiUrl: result.apiUrl
+  });
   if (result.enabled && result.token) {
     enableComments(result);
+  } else {
+    console.log('[RepoComments CS] Comments not enabled - enabled:', result.enabled, 'hasToken:', !!result.token);
   }
 });
 
@@ -77,7 +84,7 @@ async function enableComments(config) {
 
   console.log('[RepoComments] Enabling comments on page');
 
-  const apiUrl = config.apiUrl || 'http://localhost:3000';
+  const apiUrl = config.apiUrl || 'https://renewed-appreciation-production-55e2.up.railway.app';
   const currentUrl = window.location.href;
 
   // First, try to look up the repo from the URL pattern in the backend
@@ -98,32 +105,48 @@ async function enableComments(config) {
       repo: detectRepoFromURL(),
       branch: detectBranchFromURL()
     };
+
+    // Auto-register this URL mapping so it appears in the dashboard
+    autoRegisterUrlMapping(apiUrl, config.token, repoConfig.repo, currentUrl);
+  }
+
+  // Check if script already injected (prevent double-load)
+  if (document.querySelector('script[data-repo-comments]')) {
+    console.log('[RepoComments CS] Script already injected, sending init message');
+    window.postMessage({
+      type: 'RC_INIT',
+      config: {
+        apiUrl,
+        repo: repoConfig.repo,
+        branch: repoConfig.branch || 'main',
+        token: config.token
+      }
+    }, '*');
+    commentsEnabled = true;
+    return;
   }
 
   // Inject the comments UI script
   const script = document.createElement('script');
   script.src = chrome.runtime.getURL('src/comments-ui.js');
+  script.setAttribute('data-repo-comments', 'true');
   script.onload = () => {
-    // Initialize RepoComments with config
-    const initScript = document.createElement('script');
-    initScript.textContent = `
-      (function() {
-        // Store token in localStorage for RepoComments to use
-        localStorage.setItem('repo-comments-token', '${config.token}');
-
-        // Initialize with detected/configured repo
-        if (window.RepoComments) {
-          window.repoCommentsInstance = new RepoComments({
-            apiUrl: '${apiUrl}',
-            repo: '${repoConfig.repo}',
-            branch: '${repoConfig.branch || 'main'}'
-          });
-          console.log('[RepoComments] Initialized with repo:', '${repoConfig.repo}', 'branch:', '${repoConfig.branch || 'main'}');
-        }
-      })();
-    `;
-    document.head.appendChild(initScript);
+    console.log('[RepoComments CS] Script loaded, sending init via postMessage');
+    // Use postMessage instead of inline script (CSP-safe)
+    window.postMessage({
+      type: 'RC_INIT',
+      config: {
+        apiUrl,
+        repo: repoConfig.repo,
+        branch: repoConfig.branch || 'main',
+        token: config.token
+      }
+    }, '*');
     commentsEnabled = true;
+    console.log('[RepoComments CS] Comments UI initialized successfully');
+  };
+  script.onerror = (err) => {
+    console.error('[RepoComments CS] Failed to load comments-ui.js:', err);
   };
   document.head.appendChild(script);
 }
@@ -206,4 +229,47 @@ function disableComments() {
   if (root) root.remove();
 
   commentsEnabled = false;
+}
+
+// Auto-register URL mapping so it appears in dashboard
+async function autoRegisterUrlMapping(apiUrl, token, repo, currentUrl) {
+  try {
+    // Create a URL pattern from the current URL (use base URL + wildcard)
+    const url = new URL(currentUrl);
+    const urlPattern = `${url.origin}${url.pathname.split('/').slice(0, 2).join('/')}/*`;
+
+    // Detect environment from URL
+    let environment = 'production';
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+      environment = 'development';
+    } else if (url.hostname.includes('preview') || url.hostname.includes('staging')) {
+      environment = 'staging';
+    }
+
+    console.log('[RepoComments] Auto-registering URL mapping:', { repo, urlPattern, environment });
+
+    const response = await fetch(`${apiUrl}/api/v1/repo-urls`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        repo,
+        url_pattern: urlPattern,
+        environment,
+        description: 'Auto-registered by Chrome extension'
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[RepoComments] URL mapping registered:', data.url_pattern);
+    } else {
+      const errorText = await response.text();
+      console.log('[RepoComments] Failed to register URL mapping:', response.status, errorText);
+    }
+  } catch (e) {
+    console.log('[RepoComments] Error auto-registering URL mapping:', e.message);
+  }
 }

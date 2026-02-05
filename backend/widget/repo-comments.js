@@ -27,7 +27,7 @@
         }
 
         // Production default
-        return 'https://repo-comments-system-production.up.railway.app';
+        return 'https://renewed-appreciation-production-55e2.up.railway.app';
     }
 
     // Auto-detect repo from URL patterns

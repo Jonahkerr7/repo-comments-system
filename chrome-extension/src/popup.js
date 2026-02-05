@@ -1,6 +1,7 @@
 // Popup script for RepoComments extension
 
-const API_URL = 'http://localhost:3000';
+const API_URL = 'https://renewed-appreciation-production-55e2.up.railway.app';
+const DASHBOARD_URL = 'http://localhost:9000'; // Admin dashboard
 
 // Load state on popup open
 document.addEventListener('DOMContentLoaded', async () => {
@@ -55,13 +56,16 @@ function updateStatus(enabled) {
 
 // Login button
 document.getElementById('login-btn').addEventListener('click', async () => {
-  // Open OAuth flow in new tab
+  // Create state with dashboard as redirect URI
+  const state = btoa(JSON.stringify({ redirect_uri: DASHBOARD_URL }));
+
+  // Open OAuth flow in new tab - will redirect to dashboard after auth
   chrome.tabs.create({
-    url: `${API_URL}/api/v1/auth/github`,
+    url: `${API_URL}/api/v1/auth/github?state=${encodeURIComponent(state)}`,
     active: true
   });
 
-  // Listen for the OAuth callback
+  // Listen for the OAuth callback (user lands on dashboard with token)
   chrome.tabs.onUpdated.addListener(function listener(tabId, info, tab) {
     if (info.status === 'complete' && tab.url && tab.url.includes('token=')) {
       const url = new URL(tab.url);
@@ -74,14 +78,18 @@ document.getElementById('login-btn').addEventListener('click', async () => {
         })
         .then(res => res.json())
         .then(user => {
-          // Store token and user
+          // Store token and user in extension storage
           chrome.runtime.sendMessage({
             type: 'SET_AUTH_TOKEN',
             token: token,
             user: user
           }, () => {
-            showLoggedInState(user, false);
-            chrome.tabs.remove(tabId);
+            // Auto-enable comments after login
+            chrome.storage.local.set({ enabled: true }, () => {
+              showLoggedInState(user, true);
+              chrome.action.setBadgeText({ text: 'ON' });
+              chrome.action.setBadgeBackgroundColor({ color: '#1677ff' });
+            });
           });
         })
         .catch(err => {

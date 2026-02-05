@@ -4,7 +4,7 @@ class API {
   constructor() {
     // Use centralized configuration (falls back to production if config not loaded)
     this.baseURL = window.RepoCommentsConfig?.apiUrl ||
-                   'https://repo-comments-system-production.up.railway.app/api/v1';
+                   'https://renewed-appreciation-production-55e2.up.railway.app/api/v1';
     this.token = localStorage.getItem('admin_token');
 
     // Log which API endpoint is being used

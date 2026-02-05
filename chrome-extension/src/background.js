@@ -7,7 +7,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // Set default settings
   chrome.storage.local.set({
     enabled: false,
-    apiUrl: 'http://localhost:3000',
+    apiUrl: 'https://renewed-appreciation-production-55e2.up.railway.app',
     token: null,
     user: null
   });
@@ -25,16 +25,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'SET_AUTH_TOKEN') {
     chrome.storage.local.set({
       token: request.token,
-      user: request.user
+      user: request.user,
+      enabled: true,
+      apiUrl: 'https://renewed-appreciation-production-55e2.up.railway.app'
     }, () => {
-      sendResponse({ success: true });
+      console.log('[RepoComments BG] Token saved, enabled=true, notifying tabs');
 
-      // Notify all tabs to reinitialize
+      // Set badge to show enabled
+      chrome.action.setBadgeText({ text: 'ON' });
+      chrome.action.setBadgeBackgroundColor({ color: '#1677ff' });
+
+      // Notify all tabs to enable comments
       chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, { type: 'REINIT_COMMENTS' }).catch(() => {});
+          chrome.tabs.sendMessage(tab.id, { type: 'ENABLE_COMMENTS' }).catch(() => {});
         });
       });
+
+      sendResponse({ success: true });
     });
     return true;
   }
@@ -67,7 +75,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           text: newState ? 'ON' : ''
         });
         chrome.action.setBadgeBackgroundColor({
-          color: newState ? '#7B61FF' : '#999999'
+          color: newState ? '#1677ff' : '#999999'
         });
 
         // Notify current tab
@@ -126,44 +134,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Helper function to crop image to element bounds
+// Uses createImageBitmap instead of Image (not available in service workers)
 async function cropImage(dataUrl, rect, dpr = 1) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      // Create canvas for cropping
-      const canvas = new OffscreenCanvas(
-        Math.min(rect.width * dpr, 400), // Max width 400px
-        Math.min(rect.height * dpr, 300) // Max height 300px
-      );
-      const ctx = canvas.getContext('2d');
+  try {
+    // Convert data URL to blob
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
 
-      // Calculate scale to fit within max dimensions
-      const scale = Math.min(400 / (rect.width * dpr), 300 / (rect.height * dpr), 1);
-      canvas.width = rect.width * dpr * scale;
-      canvas.height = rect.height * dpr * scale;
+    // Create image bitmap (works in service workers)
+    const imageBitmap = await createImageBitmap(blob);
 
-      // Draw cropped portion
-      ctx.drawImage(
-        img,
-        rect.x * dpr, rect.y * dpr,    // Source x, y
-        rect.width * dpr, rect.height * dpr, // Source width, height
-        0, 0,                              // Dest x, y
-        canvas.width, canvas.height        // Dest width, height
-      );
+    // Create canvas for cropping
+    const scale = Math.min(400 / (rect.width * dpr), 300 / (rect.height * dpr), 1);
+    const canvas = new OffscreenCanvas(
+      Math.round(rect.width * dpr * scale),
+      Math.round(rect.height * dpr * scale)
+    );
+    const ctx = canvas.getContext('2d');
 
-      // Convert to data URL
-      canvas.convertToBlob({ type: 'image/png', quality: 0.8 })
-        .then(blob => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        })
-        .catch(reject);
-    };
-    img.onerror = reject;
-    img.src = dataUrl;
-  });
+    // Draw cropped portion
+    ctx.drawImage(
+      imageBitmap,
+      rect.x * dpr, rect.y * dpr,    // Source x, y
+      rect.width * dpr, rect.height * dpr, // Source width, height
+      0, 0,                              // Dest x, y
+      canvas.width, canvas.height        // Dest width, height
+    );
+
+    // Convert to data URL
+    const croppedBlob = await canvas.convertToBlob({ type: 'image/png' });
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(croppedBlob);
+    });
+  } catch (error) {
+    console.error('[RepoComments BG] cropImage error:', error);
+    throw error;
+  }
 }
 
 // Update badge when tabs change
@@ -173,4 +182,78 @@ chrome.tabs.onActivated.addListener(() => {
       text: result.enabled ? 'ON' : ''
     });
   });
+});
+
+// Listen for OAuth callback - capture token from URL
+const API_URL = 'https://renewed-appreciation-production-55e2.up.railway.app';
+
+// Trusted domains for token capture (security: only accept tokens from known sources)
+const TRUSTED_AUTH_HOSTS = [
+  'renewed-appreciation-production-55e2.up.railway.app',
+  'localhost',
+  '127.0.0.1',
+  'jonahkerr7.github.io'
+];
+
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  // Check if this is the OAuth callback with token
+  if (info.status === 'complete' && tab.url && tab.url.includes('token=')) {
+    console.log('[RepoComments BG] Detected potential OAuth callback');
+
+    try {
+      const url = new URL(tab.url);
+
+      // Security: Only capture tokens from trusted domains
+      const isTrustedHost = TRUSTED_AUTH_HOSTS.some(host =>
+        url.hostname === host || url.hostname.endsWith('.' + host)
+      );
+
+      if (!isTrustedHost) {
+        console.log('[RepoComments BG] Ignoring token from untrusted domain:', url.hostname);
+        return;
+      }
+
+      console.log('[RepoComments BG] Token from trusted domain:', url.hostname);
+      const token = url.searchParams.get('token');
+
+      if (token) {
+        console.log('[RepoComments BG] Token found, fetching user info');
+
+        // Fetch user info
+        fetch(`${API_URL}/api/v1/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(user => {
+          console.log('[RepoComments BG] User fetched:', user.name);
+
+          // Store everything
+          chrome.storage.local.set({
+            token: token,
+            user: user,
+            enabled: true,
+            apiUrl: API_URL
+          }, () => {
+            console.log('[RepoComments BG] Auth saved, enabling comments');
+
+            // Set badge
+            chrome.action.setBadgeText({ text: 'ON' });
+            chrome.action.setBadgeBackgroundColor({ color: '#1677ff' });
+
+            // Notify all tabs
+            chrome.tabs.query({}, (tabs) => {
+              tabs.forEach(t => {
+                chrome.tabs.sendMessage(t.id, { type: 'ENABLE_COMMENTS' }).catch(() => {});
+              });
+            });
+          });
+        })
+        .catch(err => {
+          console.error('[RepoComments BG] Failed to fetch user:', err);
+        });
+      }
+    } catch (e) {
+      console.error('[RepoComments BG] Error parsing OAuth URL:', e);
+    }
+  }
 });
