@@ -1,18 +1,391 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Redirecting...</title>
-    <script>
-        // Get the current URL parameters and pass them along
-        const params = window.location.search || '?repo=Jonahkerr7/repo-comments-system';
-        window.location.href = '/repo-comments-system/example-simple/' + params;
-    </script>
-    <noscript>
-        <meta http-equiv="refresh" content="0; url=/repo-comments-system/example-simple/?repo=Jonahkerr7/repo-comments-system">
-    </noscript>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RepoComments Test - Design Prototype</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #F8F9FA;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-bottom: 1px solid #E5E5E5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 {
+            color: #7B61FF;
+            font-size: 24px;
+        }
+
+        .login-btn {
+            background: #7B61FF;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .login-btn:hover {
+            background: #6852E8;
+        }
+
+        .main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 48px 24px;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 80px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            color: white;
+            margin-bottom: 48px;
+        }
+
+        .hero h2 {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .hero p {
+            font-size: 20px;
+            margin-bottom: 32px;
+        }
+
+        .cta-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 32px;
+            border-radius: 12px;
+            border: 1px solid #E5E5E5;
+        }
+
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .feature-card h3 {
+            font-size: 24px;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            color: #6F6F6F;
+        }
+
+        .footer {
+            background: white;
+            border-top: 1px solid #E5E5E5;
+            padding: 32px 24px;
+            text-align: center;
+            color: #6F6F6F;
+            font-size: 14px;
+            margin-top: 48px;
+        }
+
+        .footer-hint {
+            margin-top: 12px;
+            color: #7B61FF;
+            font-weight: 500;
+        }
+
+        /* Tabs */
+        .tabs {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .tab-header {
+            display: flex;
+            border-bottom: 2px solid #E5E5E5;
+            background: #F8F9FA;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 16px 24px;
+            background: none;
+            border: none;
+            font-size: 16px;
+            font-weight: 500;
+            color: #6F6F6F;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab-button:hover {
+            background: #F0F0F0;
+            color: #000;
+        }
+
+        .tab-button.active {
+            color: #7B61FF;
+            background: white;
+            border-bottom-color: #7B61FF;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 32px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .tab-section h3 {
+            margin-bottom: 16px;
+            color: #333;
+        }
+
+        .tab-section p {
+            color: #6F6F6F;
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+
+        .action-button {
+            background: #7B61FF;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-right: 8px;
+        }
+
+        .action-button:hover {
+            background: #6852E8;
+        }
+
+        .action-button.secondary {
+            background: white;
+            color: #7B61FF;
+            border: 2px solid #7B61FF;
+        }
+
+        .action-button.secondary:hover {
+            background: #F5F5FF;
+        }
+    </style>
 </head>
 <body>
-    <p>Redirecting to <a href="/repo-comments-system/example-simple/?repo=Jonahkerr7/repo-comments-system">demo page</a>...</p>
+    <div class="header">
+        <h1>Design Prototype</h1>
+        <a href="https://repo-comments-system-production.up.railway.app/api/v1/auth/github" class="login-btn" id="loginBtn">
+            Login with GitHub
+        </a>
+    </div>
+
+    <div class="main">
+        <div class="hero">
+            <h2>Welcome to Our New Dashboard</h2>
+            <p>This is a design prototype with integrated commenting</p>
+            <button class="cta-btn">Get Started</button>
+        </div>
+
+        <!-- Tabbed Interface -->
+        <div class="tabs">
+            <div class="tab-header">
+                <button class="tab-button active" data-tab="overview">Overview</button>
+                <button class="tab-button" data-tab="features">Features</button>
+                <button class="tab-button" data-tab="settings">Settings</button>
+            </div>
+
+            <!-- Overview Tab -->
+            <div class="tab-content active" id="tab-overview">
+                <div class="tab-section">
+                    <h3>Welcome to Our Dashboard</h3>
+                    <p>This is a comprehensive dashboard that helps you manage your projects, track analytics, and configure settings all in one place.</p>
+                    <p>Click on the tabs above to explore different sections. Try adding comments to different elements in each tab!</p>
+                    <button class="action-button">Get Started</button>
+                    <button class="action-button secondary">Learn More</button>
+                </div>
+            </div>
+
+            <!-- Features Tab -->
+            <div class="tab-content" id="tab-features">
+                <div class="tab-section">
+                    <h3>📊 Analytics Dashboard</h3>
+                    <p>Track your metrics in real-time with beautiful, customizable dashboards. Monitor user engagement, conversion rates, and revenue growth.</p>
+                    <button class="action-button">View Analytics</button>
+                </div>
+
+                <div class="tab-section" style="margin-top: 24px;">
+                    <h3>🚀 Performance Optimization</h3>
+                    <p>Our platform is optimized for speed and efficiency. Experience lightning-fast load times and smooth interactions.</p>
+                    <button class="action-button">Run Performance Test</button>
+                </div>
+
+                <div class="tab-section" style="margin-top: 24px;">
+                    <h3>🔒 Enterprise Security</h3>
+                    <p>Enterprise-grade security and compliance. Your data is protected with industry-standard encryption and regular security audits.</p>
+                    <button class="action-button">Security Settings</button>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div class="tab-content" id="tab-settings">
+                <div class="tab-section">
+                    <h3>⚙️ Account Settings</h3>
+                    <p>Manage your account preferences, notification settings, and privacy controls.</p>
+                    <button class="action-button">Edit Profile</button>
+                    <button class="action-button secondary">Change Password</button>
+                </div>
+
+                <div class="tab-section" style="margin-top: 24px;">
+                    <h3>🔔 Notifications</h3>
+                    <p>Choose how and when you want to receive notifications from our platform.</p>
+                    <button class="action-button">Configure Notifications</button>
+                </div>
+
+                <div class="tab-section" style="margin-top: 24px;">
+                    <h3>🎨 Appearance</h3>
+                    <p>Customize the look and feel of your dashboard with themes and color schemes.</p>
+                    <button class="action-button">Choose Theme</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>&copy; 2024 Acme Corp. This is a design prototype with RepoComments.</p>
+        <p class="footer-hint" id="hint">
+            💡 Try switching tabs and adding comments to different buttons - comments will only show on the correct tab!
+        </p>
+    </div>
+
+    <script>
+        // Tab switching functionality
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const tabName = button.dataset.tab;
+
+                // Remove active class from all buttons and contents
+                document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+                // Add active class to clicked button and corresponding content
+                button.classList.add('active');
+                document.getElementById(`tab-${tabName}`).classList.add('active');
+            });
+        });
+
+        // Check for token in URL (from OAuth callback) and save it
+        const initialParams = new URLSearchParams(window.location.search);
+        const tokenFromUrl = initialParams.get('token');
+        if (tokenFromUrl) {
+            localStorage.setItem('repo-comments-token', tokenFromUrl);
+            // Also set admin_token for cross-compatibility
+            localStorage.setItem('admin_token', tokenFromUrl);
+            // Remove token from URL for cleaner appearance
+            initialParams.delete('token');
+            const newUrl = initialParams.toString()
+                ? `${window.location.pathname}?${initialParams.toString()}`
+                : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+            // Reload to initialize with the new token
+            window.location.reload();
+        }
+
+        // Get repo from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const repo = urlParams.get('repo') || 'acme-corp/design-system';
+        const branch = urlParams.get('branch') || 'main';
+
+        // Update login button to preserve repo param on redirect
+        const loginBtn = document.getElementById('loginBtn');
+        const redirectUri = window.location.origin + window.location.pathname + window.location.search;
+        const state = btoa(JSON.stringify({ redirect_uri: redirectUri }));
+        loginBtn.href = `https://repo-comments-system-production.up.railway.app/api/v1/auth/github?state=${encodeURIComponent(state)}`;
+
+        // Show current repo in header
+        const repoInfo = document.createElement('span');
+        repoInfo.style.cssText = 'font-size: 12px; color: #6F6F6F; margin-right: 16px;';
+        repoInfo.textContent = `Testing: ${repo}`;
+        loginBtn.parentNode.insertBefore(repoInfo, loginBtn);
+
+        // Simple test - just check if we can reach the backend
+        fetch('https://repo-comments-system-production.up.railway.app/health')
+            .then(res => res.json())
+            .then(data => {
+                console.log('✅ Backend is running:', data);
+                // Check both token keys - demo app uses 'repo-comments-token', admin dashboard uses 'admin_token'
+                const token = localStorage.getItem('repo-comments-token') || localStorage.getItem('admin_token');
+                if (token) {
+                    document.getElementById('hint').textContent = `💡 Logged in! Commenting is active for ${repo}`;
+                    loginBtn.textContent = 'Logged In ✓';
+                    loginBtn.style.background = '#00C853';
+                } else {
+                    document.getElementById('hint').textContent = '💡 Backend is ready! Click "Login with GitHub" to test';
+                }
+            })
+            .catch(err => {
+                console.error('❌ Backend is not running:', err);
+                document.getElementById('hint').textContent = '⚠️ Backend is not responding. Make sure docker compose is running.';
+                document.getElementById('hint').style.color = '#FF4757';
+            });
+    </script>
+
+    <!-- Socket.IO for real-time updates -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <!-- RepoComments Vanilla JS Implementation -->
+    <script src="/comments.js"></script>
+    <script>
+        // Initialize RepoComments immediately (scripts are at bottom, DOM is ready)
+        (function() {
+            const token = localStorage.getItem('repo-comments-token') || localStorage.getItem('admin_token');
+            if (token && typeof RepoComments !== 'undefined') {
+                const urlParams = new URLSearchParams(window.location.search);
+                const repo = urlParams.get('repo') || 'acme-corp/design-system';
+                const branch = urlParams.get('branch') || 'main';
+
+                window.repoCommentsInstance = new RepoComments({
+                    apiUrl: 'https://repo-comments-system-production.up.railway.app',
+                    repo: repo,
+                    branch: branch
+                });
+                console.log('[RepoComments] Initialized for', repo, branch);
+            }
+        })();
+    </script>
 </body>
 </html>
