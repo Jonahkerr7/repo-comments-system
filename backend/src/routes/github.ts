@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth';
+import { decryptToken } from '../auth/config';
 import { query } from '../db';
 import { AuthenticatedRequest } from '../types';
 import { logger } from '../logger';
@@ -24,10 +25,11 @@ router.get('/repos', authenticate, async (req, res) => {
       });
     }
 
-    const { github_token } = userResult.rows[0];
+    const { github_token: encryptedToken } = userResult.rows[0];
+    const github_token = decryptToken(encryptedToken);
 
-    // Fetch repos from GitHub API - owner affiliation shows only repos user owns
-    const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner', {
+    // Fetch repos from GitHub API - include owned repos and org member repos
+    const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,organization_member', {
       headers: {
         'Authorization': `Bearer ${github_token}`,
         'Accept': 'application/vnd.github.v3+json',
@@ -83,7 +85,8 @@ router.get('/repos/:owner/:repo/branches', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'GitHub not connected' });
     }
 
-    const { github_token } = userResult.rows[0];
+    const { github_token: encryptedToken } = userResult.rows[0];
+    const github_token = decryptToken(encryptedToken);
 
     const response = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`,
