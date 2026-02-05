@@ -12,6 +12,7 @@ const ALLOWED_REDIRECT_HOSTS = [
   '127.0.0.1',
   'jonahkerr7.github.io',
   'repo-comments-system-production.up.railway.app',
+  'renewed-appreciation-production-55e2.up.railway.app',
 ];
 
 // Allow additional hosts from environment variable
