@@ -27,6 +27,7 @@ export interface Thread {
   xpath: string | null;
   coordinates: Coordinates | null;
   screenshot_url: string | null;
+  view_context: ViewContext | null;
 
   // Metadata
   status: 'open' | 'resolved';
@@ -46,6 +47,13 @@ export interface Coordinates {
   y: number;
   width?: number;
   height?: number;
+}
+
+export interface ViewContext {
+  hash?: string;
+  pathname?: string;
+  activeTabs?: string[];
+  activeModal?: string | null;
 }
 
 export interface Message {
@@ -105,6 +113,7 @@ export interface CreateThreadRequest {
   screenshot?: string; // Base64 data URL
   element_tag?: string;
   element_text?: string;
+  view_context?: ViewContext;
 
   // Initial message
   message: string;
@@ -125,6 +134,7 @@ export interface UpdateThreadRequest {
   tags?: string[];
   coordinates?: { x: number; y: number };
   selector?: string;
+  view_context?: ViewContext;
 }
 
 import { Request } from 'express';

@@ -6,6 +6,34 @@ import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
+// Allowed redirect hosts for OAuth callbacks
+const ALLOWED_REDIRECT_HOSTS = [
+  'localhost',
+  '127.0.0.1',
+  'jonahkerr7.github.io',
+  'repo-comments-system-production.up.railway.app',
+];
+
+// Allow additional hosts from environment variable
+if (process.env.ALLOWED_REDIRECT_HOSTS) {
+  ALLOWED_REDIRECT_HOSTS.push(...process.env.ALLOWED_REDIRECT_HOSTS.split(','));
+}
+
+/**
+ * Validates that a redirect URI is safe to redirect to.
+ * Prevents open redirect attacks by checking against allowlist.
+ */
+function isValidRedirectUri(uri: string): boolean {
+  try {
+    const url = new URL(uri);
+    return ALLOWED_REDIRECT_HOSTS.some(host =>
+      url.hostname === host || url.hostname.endsWith('.' + host)
+    );
+  } catch {
+    return false;
+  }
+}
+
 // GitHub OAuth
 router.get('/github', (req, res, next) => {
   // Check if GitHub OAuth is configured
@@ -64,9 +92,10 @@ router.get(
     if (state) {
       try {
         const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
-        if (stateData.redirect_uri) {
+        if (stateData.redirect_uri && isValidRedirectUri(stateData.redirect_uri)) {
           redirectUrl = stateData.redirect_uri;
         }
+        // If redirect_uri is invalid, silently use default to prevent open redirect attacks
       } catch (e) {
         // Invalid state, use default
       }
@@ -159,17 +188,25 @@ router.get('/dev-login', async (req, res) => {
       name: user.name,
     });
 
-    // Get redirect URL from query or state
-    let redirectUrl = (req.query.redirect as string) || 'http://localhost:9000';
+    // Get redirect URL from query or state (with validation)
+    const defaultRedirect = 'http://localhost:9000';
+    let redirectUrl = defaultRedirect;
 
+    // Check direct redirect query param
+    const queryRedirect = req.query.redirect as string;
+    if (queryRedirect && isValidRedirectUri(queryRedirect)) {
+      redirectUrl = queryRedirect;
+    }
+
+    // Check state parameter (takes precedence if valid)
     if (req.query.state) {
       try {
         const stateData = JSON.parse(Buffer.from(req.query.state as string, 'base64').toString());
-        if (stateData.redirect_uri) {
+        if (stateData.redirect_uri && isValidRedirectUri(stateData.redirect_uri)) {
           redirectUrl = stateData.redirect_uri;
         }
       } catch (e) {
-        // Use default
+        // Use current redirectUrl
       }
     }
 

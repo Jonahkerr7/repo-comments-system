@@ -13,12 +13,20 @@ import { logger } from '../logger';
 
 const router = Router();
 
+// Maximum screenshot size (2MB base64 encoded = ~2.7MB string)
+const MAX_SCREENSHOT_SIZE = 3 * 1024 * 1024; // 3MB to account for base64 overhead
+
 // Validation middleware
 const validateThread = [
   body('repo').notEmpty().withMessage('Repository is required'),
   body('branch').notEmpty().withMessage('Branch is required'),
   body('context_type').isIn(['code', 'ui']).withMessage('Invalid context type'),
   body('message').notEmpty().withMessage('Initial message is required'),
+  body('screenshot')
+    .optional()
+    .isString()
+    .isLength({ max: MAX_SCREENSHOT_SIZE })
+    .withMessage('Screenshot exceeds maximum size (2MB)'),
 ];
 
 // Create a new thread
@@ -137,7 +145,7 @@ router.post(
   }
 );
 
-// Get threads with filters
+// Get threads with filters (with pagination)
 router.get(
   '/',
   authenticate,
@@ -146,6 +154,8 @@ router.get(
     validateQuery('branch').optional(),
     validateQuery('status').optional().isIn(['open', 'resolved']),
     validateQuery('context_type').optional().isIn(['code', 'ui']),
+    validateQuery('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
+    validateQuery('offset').optional().isInt({ min: 0 }).toInt(),
   ],
   async (req, res) => {
     const errors = validationResult(req);
@@ -154,6 +164,9 @@ router.get(
     }
 
     const { repo, branch, status, context_type } = req.query;
+    // Pagination with sensible defaults
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
 
     try {
       let queryText = `
@@ -188,7 +201,8 @@ router.get(
         paramIndex++;
       }
 
-      queryText += ' ORDER BY ts.created_at DESC';
+      queryText += ` ORDER BY ts.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+      params.push(limit, offset);
 
       const result = await query<ThreadSummary>(queryText, params);
 

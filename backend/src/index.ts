@@ -26,6 +26,11 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
 const HOST = process.env.HOST || 'localhost';
 
+// Trust proxy for Railway/production (fixes X-Forwarded-For header handling)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Serve widget files BEFORE helmet (to avoid CORP restrictions)
 const widgetPath = process.env.NODE_ENV === 'production'
   ? path.join(process.cwd(), 'widget')
@@ -121,16 +126,23 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Debug endpoint to check env vars
+// Debug endpoint to check env vars (development only)
 app.get('/debug/env', (req, res) => {
-  const secret = process.env.GITHUB_CLIENT_SECRET;
+  // Disable in production to prevent information disclosure
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+
+  // Only show whether variables are set, not their values or lengths
   res.json({
-    NODE_ENV: process.env.NODE_ENV,
-    GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ? 'SET (' + process.env.GITHUB_CLIENT_ID.substring(0, 4) + '...)' : 'NOT SET',
-    GITHUB_CLIENT_SECRET: secret ? 'SET (len=' + secret.length + ')' : 'NOT SET (type=' + typeof secret + ', val=' + JSON.stringify(secret) + ')',
+    NODE_ENV: process.env.NODE_ENV || 'development',
+    GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID ? 'SET' : 'NOT SET',
+    GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET ? 'SET' : 'NOT SET',
     GITHUB_CALLBACK_URL: process.env.GITHUB_CALLBACK_URL ? 'SET' : 'NOT SET',
     DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET',
-    ALL_GITHUB_VARS: Object.keys(process.env).filter(k => k.includes('GITHUB')).join(', '),
+    JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT SET',
+    TOKEN_ENCRYPTION_KEY: process.env.TOKEN_ENCRYPTION_KEY ? 'SET' : 'NOT SET',
+    WEBHOOK_SECRET: process.env.WEBHOOK_SECRET ? 'SET' : 'NOT SET',
   });
 });
 

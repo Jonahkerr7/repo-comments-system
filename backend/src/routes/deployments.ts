@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { body, query as validateQuery, param, validationResult } from 'express-validator';
 import { authenticate } from '../middleware/auth';
 import { query } from '../db';
@@ -6,6 +6,35 @@ import { AuthenticatedRequest } from '../types';
 import { logger } from '../logger';
 
 const router = Router();
+
+/**
+ * Middleware to verify webhook authentication.
+ * In production, requires X-API-Key header matching WEBHOOK_SECRET.
+ * In development, allows unauthenticated requests if no secret is set.
+ */
+function verifyWebhookAuth(req: Request, res: Response, next: NextFunction): void {
+  const apiKey = req.headers['x-api-key'] as string | undefined;
+  const webhookSecret = process.env.WEBHOOK_SECRET;
+
+  // In development without WEBHOOK_SECRET, allow unauthenticated
+  if (!webhookSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('WEBHOOK_SECRET not configured in production');
+      res.status(500).json({ error: 'Webhook not configured' });
+      return;
+    }
+    return next();
+  }
+
+  // Validate API key
+  if (!apiKey || apiKey !== webhookSecret) {
+    logger.warn('Webhook authentication failed', { ip: req.ip });
+    res.status(401).json({ error: 'Invalid or missing API key' });
+    return;
+  }
+
+  next();
+}
 
 // Get all deployments (with filters)
 router.get('/', authenticate, async (req, res) => {
@@ -121,7 +150,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create a new deployment (called by GitHub Actions/webhooks)
 router.post(
   '/',
-  // No auth required for webhooks - use API key instead
+  verifyWebhookAuth,
   [
     body('repo').notEmpty().withMessage('Repository is required'),
     body('branch').notEmpty().withMessage('Branch is required'),

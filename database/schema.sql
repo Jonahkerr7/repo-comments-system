@@ -90,6 +90,7 @@ CREATE TABLE threads (
   xpath TEXT,                              -- alternative: XPath
   coordinates JSONB,                       -- { x: number, y: number, width?, height? }
   screenshot_url TEXT,                     -- S3/storage URL
+  view_context JSONB,                      -- { hash, pathname, activeTabs[], activeModal }
 
   -- Thread metadata
   status VARCHAR(20) DEFAULT 'open',       -- 'open' | 'resolved'
@@ -279,3 +280,4 @@ COMMENT ON TABLE permissions IS 'Repository-level access control';
 COMMENT ON COLUMN threads.context_type IS 'Determines whether this comment is on code or UI';
 COMMENT ON COLUMN threads.selector IS 'CSS selector for UI element (e.g., ".button.primary")';
 COMMENT ON COLUMN threads.coordinates IS 'Absolute position for UI comments { x, y, width, height }';
+COMMENT ON COLUMN threads.view_context IS 'UI view state context { hash, pathname, activeTabs[], activeModal }';
