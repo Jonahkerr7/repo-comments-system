@@ -209,7 +209,7 @@
 <body>
     <div class="header">
         <h1>Design Prototype</h1>
-        <a href="http://localhost:3000/api/v1/auth/github" class="login-btn" id="loginBtn">
+        <a href="https://repo-comments-system-production.up.railway.app/api/v1/auth/github" class="login-btn" id="loginBtn">
             Login with GitHub
         </a>
     </div>
@@ -334,7 +334,7 @@
         const loginBtn = document.getElementById('loginBtn');
         const redirectUri = window.location.origin + window.location.pathname + window.location.search;
         const state = btoa(JSON.stringify({ redirect_uri: redirectUri }));
-        loginBtn.href = `http://localhost:3000/api/v1/auth/github?state=${encodeURIComponent(state)}`;
+        loginBtn.href = `https://repo-comments-system-production.up.railway.app/api/v1/auth/github?state=${encodeURIComponent(state)}`;
 
         // Show current repo in header
         const repoInfo = document.createElement('span');
@@ -343,7 +343,7 @@
         loginBtn.parentNode.insertBefore(repoInfo, loginBtn);
 
         // Simple test - just check if we can reach the backend
-        fetch('http://localhost:3000/health')
+        fetch('https://repo-comments-system-production.up.railway.app/health')
             .then(res => res.json())
             .then(data => {
                 console.log('✅ Backend is running:', data);
@@ -369,5 +369,23 @@
 
     <!-- RepoComments Vanilla JS Implementation -->
     <script src="/comments.js"></script>
+    <script>
+        // Initialize RepoComments immediately (scripts are at bottom, DOM is ready)
+        (function() {
+            const token = localStorage.getItem('repo-comments-token') || localStorage.getItem('admin_token');
+            if (token && typeof RepoComments !== 'undefined') {
+                const urlParams = new URLSearchParams(window.location.search);
+                const repo = urlParams.get('repo') || 'acme-corp/design-system';
+                const branch = urlParams.get('branch') || 'main';
+
+                window.repoCommentsInstance = new RepoComments({
+                    apiUrl: 'https://repo-comments-system-production.up.railway.app',
+                    repo: repo,
+                    branch: branch
+                });
+                console.log('[RepoComments] Initialized for', repo, branch);
+            }
+        })();
+    </script>
 </body>
 </html>
