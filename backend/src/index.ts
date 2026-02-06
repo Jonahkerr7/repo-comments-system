@@ -21,7 +21,6 @@ import permissionRoutes from './routes/permissions';
 import repoUrlRoutes from './routes/repo-urls';
 import deploymentsRoutes from './routes/deployments';
 import githubRoutes from './routes/github';
-import researchRoutes from './routes/research';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -98,7 +97,7 @@ const isDevelopment = process.env.NODE_ENV !== 'production';
 
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-  max: isDevelopment ? 10000 : parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+  max: isDevelopment ? 10000 : parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '500'),
   message: 'Too many requests from this IP, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
@@ -162,7 +161,6 @@ app.use('/api/v1/permissions', permissionRoutes);
 app.use('/api/v1/repo-urls', repoUrlRoutes);
 app.use('/api/v1/deployments', deploymentsRoutes);
 app.use('/api/v1/github', githubRoutes);
-app.use('/api/v1/research', researchRoutes);
 
 // 404 handler
 app.use((req, res) => {
