@@ -103,8 +103,17 @@ router.post(
       const wasInserted = row.inserted;
       delete row.inserted;
 
+      // Auto-grant admin permission to the user who registers this repo URL
+      // This allows them to immediately start creating comments
+      await query(
+        `INSERT INTO permissions (repo, user_id, role)
+         VALUES ($1, $2, 'admin')
+         ON CONFLICT DO NOTHING`,
+        [repo, authReq.user!.id]
+      );
+
       if (wasInserted) {
-        logger.info('Repo URL mapping created', { repo, url_pattern });
+        logger.info('Repo URL mapping created with auto-permission', { repo, url_pattern, userId: authReq.user!.id });
         res.status(201).json(row);
       } else {
         logger.info('Repo URL mapping already exists', { repo, url_pattern });
