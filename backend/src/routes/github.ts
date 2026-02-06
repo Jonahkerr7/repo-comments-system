@@ -121,10 +121,11 @@ router.get('/connected', authenticate, async (req, res) => {
 
   try {
     // Get repos the user has connected (has permissions for)
+    // Use DISTINCT ON (repo) to return only one row per unique repo (the most recent)
     const permissionsResult = await query(
-      `SELECT DISTINCT repo, role, created_at FROM permissions
+      `SELECT DISTINCT ON (repo) repo, role, created_at FROM permissions
        WHERE user_id = $1
-       ORDER BY created_at DESC`,
+       ORDER BY repo, created_at DESC`,
       [authReq.user!.id]
     );
 
