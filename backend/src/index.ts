@@ -21,6 +21,7 @@ import permissionRoutes from './routes/permissions';
 import repoUrlRoutes from './routes/repo-urls';
 import deploymentsRoutes from './routes/deployments';
 import githubRoutes from './routes/github';
+import researchRoutes from './routes/research';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
@@ -55,7 +56,7 @@ const corsOrigins = process.env.CORS_ORIGIN?.split(',') || [
   'https://jonahkerr7.github.io'
 ];
 
-// Allow all localhost and chrome-extension origins in development
+// Allow all localhost, chrome-extension, and GitHub Pages origins
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     // Allow requests with no origin (like mobile apps or curl)
@@ -69,6 +70,11 @@ const corsOptions = {
 
     // Allow all localhost origins (for admin dashboard)
     if (origin.includes('localhost')) {
+      return callback(null, true);
+    }
+
+    // Allow all GitHub Pages origins (for RepoComments extension on deployed sites)
+    if (origin.endsWith('.github.io')) {
       return callback(null, true);
     }
 
@@ -156,6 +162,7 @@ app.use('/api/v1/permissions', permissionRoutes);
 app.use('/api/v1/repo-urls', repoUrlRoutes);
 app.use('/api/v1/deployments', deploymentsRoutes);
 app.use('/api/v1/github', githubRoutes);
+app.use('/api/v1/research', researchRoutes);
 
 // 404 handler
 app.use((req, res) => {
